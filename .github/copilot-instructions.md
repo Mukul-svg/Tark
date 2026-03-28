@@ -1,4 +1,4 @@
-# Copilot Instructions for OwnLLM (simplek8)
+# Copilot Instructions for Tark (simplek8)
 ## CODING STANDARDS
 - Use Go 1.25+ features and syntax.
 - Follow standard Go formatting (`gofmt`).
@@ -14,7 +14,7 @@
 - For all tech, always refer to the official documentation and best practices. If you are using a library or framework, make sure to follow their recommended patterns and conventions. This ensures that our code is maintainable and leverages the full capabilities of the tools we are using.
 
 ## Project Overview
-This is a sophisticated Go-based platform ("OwnLLM") that manages the lifecycle of private AI infrastructure. It combines a REST API, a Kubernetes controller-like logic, and an Infrastructure-as-Code runner (Pulumi Automation API).
+This is a sophisticated Go-based platform ("Tark") that manages the lifecycle of private AI infrastructure. It combines a REST API, a Kubernetes controller-like logic, and an Infrastructure-as-Code runner (Pulumi Automation API).
 
 ## 1. Architecture & Boundaries
 
@@ -27,7 +27,7 @@ This is a sophisticated Go-based platform ("OwnLLM") that manages the lifecycle 
   - `internal/worker`: Wraps the Pulumi Automation API to execute infrastructure changes programmatically.
   - `internal/http/handlers/proxy.go`: Proxies OpenAI-compatible requests to the backend inference cluster.
 
-### Infrastructure (Module: `ownllm`)
+### Infrastructure (Module: `tark`)
 - **Location**: `infra/azure/`.
 - **Role**: Defines the Azure resources (AKS, VMs) via Pulumi.
 - **Usage**: This code is **executed** by the Control Plane via Pulumi SDK, not imported as a library.

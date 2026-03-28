@@ -1,4 +1,4 @@
 config:
   azure:location: southindia
-  ownllm:location: southindia
-  ownllm:vmSize: Standard_NC4as_T4_v3
+  tark:location: southindia
+  tark:vmSize: Standard_NC4as_T4_v3

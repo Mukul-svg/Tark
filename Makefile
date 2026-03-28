@@ -1,4 +1,4 @@
-APP_NAME := ownllm
+APP_NAME := tark
 BINARY_DIR := bin
 SERVER_BIN := $(BINARY_DIR)/server
 WORKER_BIN := $(BINARY_DIR)/worker
@@ -35,6 +35,10 @@ help:
 	@echo "  make test           - Run tests"
 	@echo "  make tidy           - Run go mod tidy"
 	@echo "  make clean          - Remove build artifacts"
+	@echo "  make api-provision  - Trigger cluster provision via API"
+	@echo "  make api-deploy     - Trigger model deploy via API"
+	@echo "  make api-chat       - Send a chat test request to proxy"
+	@echo "  make api-destroy    - Trigger cluster destroy via API"
 
 .PHONY: server
 server:
@@ -64,6 +68,8 @@ dev-up:
 .PHONY: dev-down
 dev-down:
 	$(DOCKER_COMPOSE) down
+	-sudo systemctl stop postgresql redis redis-server || true
+	-sudo fuser -k 5432/tcp 6379/tcp || true
 
 .PHONY: dev-logs
 dev-logs:
@@ -71,7 +77,7 @@ dev-logs:
 
 .PHONY: migrate-init
 migrate-init:
-	psql "$(DATABASE_URL)" -f $(MIGRATION_INIT)
+	docker exec -i ai_paas_postgres psql -U postgres -d ai_paas < $(MIGRATION_INIT)
 
 .PHONY: build
 build: build-server build-worker
@@ -122,3 +128,27 @@ tidy:
 .PHONY: clean
 clean:
 	rm -rf $(BINARY_DIR)
+
+.PHONY: api-provision
+api-provision:
+	curl -X POST http://localhost:$(PORT)/api/provision \
+		-H "Content-Type: application/json" \
+		-d '{"stackName": "tark-test-01", "region": "southindia"}'
+
+.PHONY: api-deploy
+api-deploy:
+	curl -X POST http://localhost:$(PORT)/api/deploy \
+		-H "Content-Type: application/json" \
+		-d '{"name": "tinyllama"}'
+
+.PHONY: api-chat
+api-chat:
+	curl -X POST http://localhost:$(PORT)/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model": "tinyllama", "messages": [{"role": "user", "content": "Explain Kubernetes in one simple sentence."}]}'
+
+.PHONY: api-destroy
+api-destroy:
+	curl -X POST http://localhost:$(PORT)/api/destroy \
+		-H "Content-Type: application/json" \
+		-d '{"stackName": "tark-test-01"}'

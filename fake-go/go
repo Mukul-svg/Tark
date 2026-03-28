@@ -1,0 +1,9 @@
+#!/bin/bash
+# Wrapper to work around Pulumi's strict Go version parser.
+# Pulumi cannot parse non-standard Go version strings like "1.26.1-X:nodwarf5".
+# This shim intercepts `go version` and returns a clean semver string.
+if [[ "$1" == "version" ]]; then
+    echo "go version go1.24.0 linux/amd64"
+    exit 0
+fi
+exec /usr/bin/go "$@"

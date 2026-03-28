@@ -33,7 +33,10 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 	// Initialize Stack (Pulumi stack select)
 	// Using LocalSource as our Pulumi code is a generic local folder
 	// Use Upsert to create if missing, or select if existing (idempotent)
-	s, err := auto.UpsertStackLocalSource(ctx, stackName, absWorkDir)
+	env := map[string]string{
+		"PATH": fmt.Sprintf("%s:%s", filepath.Join(filepath.Dir(filepath.Dir(absWorkDir)), "fake-go"), os.Getenv("PATH")),
+	}
+	s, err := auto.UpsertStackLocalSource(ctx, stackName, absWorkDir, auto.EnvVars(env))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize stack: %w", err)
 	}
@@ -82,7 +85,10 @@ func DestroyCluster(ctx context.Context, stackName string, workDir string) error
 
 	slog.Info("Initializing Pulumi stack for destruction", "stack", stackName)
 
-	s, err := auto.UpsertStackLocalSource(ctx, stackName, absWorkDir)
+	env := map[string]string{
+		"PATH": fmt.Sprintf("%s:%s", filepath.Join(filepath.Dir(filepath.Dir(absWorkDir)), "fake-go"), os.Getenv("PATH")),
+	}
+	s, err := auto.UpsertStackLocalSource(ctx, stackName, absWorkDir, auto.EnvVars(env))
 	if err != nil {
 		return fmt.Errorf("failed to initialize stack: %w", err)
 	}

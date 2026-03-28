@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"simplek8/internal/queue"
+	"time"
 
 	"github.com/hibiken/asynq"
 )
@@ -35,7 +36,8 @@ func (c *Client) EnqueueProvision(task *asynq.Task, taskID string) (*asynq.TaskI
 	info, err := c.client.Enqueue(task,
 		asynq.Queue(queue.QueueInfraProvision),
 		asynq.TaskID(taskID),
-		asynq.MaxRetry(10),
+		asynq.MaxRetry(3),
+		asynq.Timeout(30*time.Minute),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue provision task: %w", err)
@@ -47,7 +49,8 @@ func (c *Client) EnqueueDeploy(task *asynq.Task, taskID string) (*asynq.TaskInfo
 	info, err := c.client.Enqueue(task,
 		asynq.Queue(queue.QueueModelDeploy),
 		asynq.TaskID(taskID),
-		asynq.MaxRetry(10),
+		asynq.MaxRetry(3),
+		asynq.Timeout(10*time.Minute),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue deploy task: %w", err)
@@ -59,7 +62,8 @@ func (c *Client) EnqueueDestroy(task *asynq.Task, taskID string) (*asynq.TaskInf
 	info, err := c.client.Enqueue(task,
 		asynq.Queue(queue.QueueCleanup),
 		asynq.TaskID(taskID),
-		asynq.MaxRetry(10),
+		asynq.MaxRetry(3),
+		asynq.Timeout(30*time.Minute),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue destroy task: %w", err)

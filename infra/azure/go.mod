@@ -1,4 +1,4 @@
-module ownllm
+module tark
 
 go 1.24.0
 

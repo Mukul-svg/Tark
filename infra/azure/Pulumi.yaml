@@ -1,5 +1,5 @@
-name: ownllm
-description: Pulumi program to manage Azure Clusters using the Go backend for OwnLLM project
+name: tark
+description: Pulumi program to manage Azure Clusters using the Go backend for Tark project
 runtime: go
 config:
   pulumi:tags:
