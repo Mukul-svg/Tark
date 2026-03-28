@@ -1,0 +1,7 @@
+name: ownllm
+description: Pulumi program to manage Azure Clusters using the Go backend for OwnLLM project
+runtime: go
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: azure-go

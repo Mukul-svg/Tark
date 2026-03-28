@@ -1,0 +1,45 @@
+# Study / notes / learning material
+Study/
+
+# Private keys and sensitive credentials
+infra/azure/azure_rsa
+infra/azure/azure_rsa.pub
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.kubeconfig
+kubeconfig
+client.config
+
+# Local runtime artifacts
+app.log
+app.pid
+*.log
+*.pid
+*.out
+*.err
+
+# Environment and local overrides
+.env
+.env.*
+!.env.example
+
+# Build outputs
+bin/
+dist/
+build/
+coverage.out
+*.test
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
