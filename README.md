@@ -26,7 +26,7 @@ Tark is a Go-based backend system that does two main things:
 
 Think of it as a simplified, self-hosted version of what cloud providers like AWS SageMaker or Azure ML do — but one you own entirely and can learn from.
 
-> **Why build this?** It's a practical way to learn distributed systems, Kubernetes, async job processing, reverse proxying, and cloud infrastructure — all in one real project.
+> **Why build this?** It's a practical way to learn distributed systems, Kubernetes, async job processing, reverse proxying, and cloud infrastructure — all in one real project. Yes, I have used AI tools for this project. I have used them for learning as well as building. Again, this is a personal project for my own learning.
 
 ---
 
