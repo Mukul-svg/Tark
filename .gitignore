@@ -43,5 +43,6 @@ coverage.out
 Thumbs.db
 .vscode/
 .idea/
+.github/
 docs/
 docs
