@@ -13,7 +13,6 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Read configuration
 		conf := config.New(ctx, "")
 		location := conf.Get("location")
 		if location == "" {
@@ -24,21 +23,18 @@ func main() {
 			vmSize = "Standard_B2ms"
 		}
 
-		//Read the public key
 		publicKeyBytes, err := os.ReadFile("azure_rsa.pub")
 		if err != nil {
 			return err
 		}
 		publicKey := string(publicKeyBytes)
 
-		// Create an Azure Resource Group
 		resourceGroup, err := core.NewResourceGroup(ctx, "k8s-rg", &core.ResourceGroupArgs{
 			Location: pulumi.String(location),
 		})
 		if err != nil {
 			return err
 		}
-		// Networking (Vnet, Subnet, Public IP, NSG)
 		vnet, err := network.NewVirtualNetwork(ctx, "k8s-vnet", &network.VirtualNetworkArgs{
 			ResourceGroupName: resourceGroup.Name,
 			AddressSpaces:     pulumi.StringArray{pulumi.String("10.0.0.0/16")},
@@ -92,7 +88,6 @@ func main() {
 			return err
 		}
 
-		//NIC
 		nic, err := network.NewNetworkInterface(ctx, "k8s-nic", &network.NetworkInterfaceArgs{
 			ResourceGroupName: resourceGroup.Name,
 			IpConfigurations: network.NetworkInterfaceIpConfigurationArray{
@@ -108,7 +103,6 @@ func main() {
 			return err
 		}
 
-		// Associate NSG with NIC
 		_, err = network.NewNetworkInterfaceSecurityGroupAssociation(ctx, "nic-nsg-assoc", &network.NetworkInterfaceSecurityGroupAssociationArgs{
 			NetworkInterfaceId:     nic.ID(),
 			NetworkSecurityGroupId: nsg.ID(),
@@ -117,7 +111,7 @@ func main() {
 			return err
 		}
 
-		// Startup Scipt (Clout Init)
+		// Cloud-init startup script
 		cloudInit := `#!/bin/bash
 		apt-get update
 		snap install microk8s --classic --channel=1.29
@@ -129,7 +123,6 @@ func main() {
 		chmod 600 /home/azureuser/client.config
 		chown azureuser:azureuser /home/azureuser/client.config
 		`
-		// Create the VM
 		_, err = compute.NewLinuxVirtualMachine(ctx, "k8s-vm", &compute.LinuxVirtualMachineArgs{
 			ResourceGroupName: resourceGroup.Name,
 			Size:              pulumi.String(vmSize),

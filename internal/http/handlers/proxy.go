@@ -102,20 +102,12 @@ func (h *ProxyHandler) redisClient() *redis.Client {
 	return h.cache.Client()
 }
 
-func modelTargetsKey(model string) string {
-	return "proxy:model:targets:" + strings.ToLower(model)
-}
-
-func modelRoundRobinKey(model string) string {
-	return "proxy:model:rr:" + strings.ToLower(model)
-}
-
 func (h *ProxyHandler) invalidateModelCache(ctx context.Context, model string) {
 	rdb := h.redisClient()
 	if rdb == nil {
 		return
 	}
-	if err := rdb.Del(ctx, modelTargetsKey(model), modelRoundRobinKey(model)).Err(); err != nil {
+	if err := rdb.Del(ctx, cache.ModelTargetsKey(model), cache.ModelRoundRobinKey(model)).Err(); err != nil {
 		slog.Warn("failed to invalidate model cache", "model", model, "error", err)
 	}
 }
@@ -173,7 +165,7 @@ func (h *ProxyHandler) setTargetsInCache(ctx context.Context, model string, targ
 		return
 	}
 
-	if err := rdb.Set(ctx, modelTargetsKey(model), encoded, serviceDiscoveryCacheTTL).Err(); err != nil {
+	if err := rdb.Set(ctx, cache.ModelTargetsKey(model), encoded, serviceDiscoveryCacheTTL).Err(); err != nil {
 		slog.Warn("failed to cache model targets", "model", model, "error", err)
 	}
 }
@@ -184,7 +176,7 @@ func (h *ProxyHandler) readTargetsFromCache(ctx context.Context, model string) (
 		return nil, redis.Nil
 	}
 
-	raw, err := rdb.Get(ctx, modelTargetsKey(model)).Result()
+	raw, err := rdb.Get(ctx, cache.ModelTargetsKey(model)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +195,7 @@ func (h *ProxyHandler) selectRoundRobinTarget(ctx context.Context, model string,
 
 	rdb := h.redisClient()
 	if rdb != nil {
-		counter, err := rdb.Incr(ctx, modelRoundRobinKey(model)).Result()
+		counter, err := rdb.Incr(ctx, cache.ModelRoundRobinKey(model)).Result()
 		if err == nil {
 			idx := int((counter - 1) % int64(len(targets)))
 			return targets[idx]

@@ -14,8 +14,6 @@ type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
-// Creates a new PostgresStore with a connection pool.
-// connString format: postgres://host:port/dbname?user=user&password=password
 func NewPostgresStore(ctx context.Context, connString string) (*PostgresStore, error) {
 	// Parse the configuration including params like pool_max_conns
 	config, err := pgxpool.ParseConfig(connString)

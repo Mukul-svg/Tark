@@ -46,10 +46,10 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 	var req ProvisionRequest
 	if err := c.Bind(&req); err != nil {
 		slog.Error("Failed to parse provision request", "error", err)
-		return c.String(http.StatusBadRequest, "Invalid request payload")
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
 	}
 	if req.StackName == "" {
-		return c.String(http.StatusBadRequest, "stackName is required")
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "stackName is required"})
 	}
 
 	cwd, _ := os.Getwd()
@@ -60,7 +60,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 	org, err := h.ensureDefaultOrganization(ctx)
 	if err != nil {
 		slog.Error("Failed to ensure default organization", "error", err)
-		return c.String(http.StatusInternalServerError, "Database error: failed to ensure organization")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to ensure organization"})
 	}
 
 	region := req.Region
@@ -85,7 +85,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		clusterID = existingCluster.ID
 		if err := h.store.ResetCluster(ctx, clusterID, region, "provisioning"); err != nil {
 			slog.Error("Failed to reset cluster record", "error", err)
-			return c.String(http.StatusInternalServerError, "Database error: failed to reset cluster record")
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to reset cluster record"})
 		}
 	} else {
 		clusterRecord := &models.Cluster{
@@ -99,7 +99,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		}
 		if err := h.store.CreateCluster(ctx, clusterRecord); err != nil {
 			slog.Error("Failed to create cluster record", "error", err)
-			return c.String(http.StatusInternalServerError, "Database error: failed to create cluster record")
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to create cluster record"})
 		}
 	}
 
@@ -127,13 +127,13 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 
 	task, err := tasks.NewProvisionClusterTask(payload)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create provision task")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create provision task"})
 	}
 
 	taskID := "provision:" + clusterID.String()
 	if _, err := h.queueClient.EnqueueProvision(task, taskID); err != nil {
 		slog.Error("Failed to enqueue provision task", "error", err)
-		return c.String(http.StatusInternalServerError, "Failed to enqueue provision task")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to enqueue provision task"})
 	}
 
 	return c.JSON(http.StatusAccepted, ProvisionResponse{

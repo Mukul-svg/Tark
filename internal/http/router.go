@@ -14,7 +14,7 @@ type Server struct {
 
 func NewServer(deployHandler *handlers.DeployHandler,
 	proxyHandler *handlers.ProxyHandler,
-	provsionHandler *handlers.ProvisionHandler,
+	provisionHandler *handlers.ProvisionHandler,
 	jobsHandler *handlers.JobsHandler) *Server {
 
 	e := echo.New()
@@ -41,10 +41,10 @@ func NewServer(deployHandler *handlers.DeployHandler,
 	})
 	e.POST("/api/deploy", deployHandler.PostDeploy)
 	e.POST("/v1/chat/completions", proxyHandler.Proxy)
-	e.POST("/api/provision", provsionHandler.HandleProvision)
-	e.POST("/api/destroy", provsionHandler.HandleDestroy)
+	e.POST("/api/provision", provisionHandler.HandleProvision)
+	e.POST("/api/destroy", provisionHandler.HandleDestroy)
 	e.GET("/api/jobs/:id", jobsHandler.GetJobStatus)
-	e.GET("/api/clusters", provsionHandler.HandleListClusters)
+	e.GET("/api/clusters", provisionHandler.HandleListClusters)
 	e.GET("/api/deployments", deployHandler.HandleListDeployments)
 	e.DELETE("/api/deployments/:id", deployHandler.HandleDeleteDeployment)
 	return &Server{e: e}

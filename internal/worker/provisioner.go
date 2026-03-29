@@ -12,16 +12,12 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 )
 
-// Holds data of output of a successfully provisioned cluster
 type ClusterData struct {
-	PublicIp string
+	PublicIP string
 	// Future: SSHkey, Kubeconfig, etc
 }
 
-// Runs pulumi up programmatically to provision a k8s cluster pointing to infra/azure
 func ProvisionCluster(ctx context.Context, stackName string, workDir string, configMap map[string]string) (*ClusterData, error) {
-	// Currently only Azure is supported
-	// Find abs path to infra/azure
 	absWorkDir, err := filepath.Abs(workDir)
 
 	if err != nil {
@@ -30,9 +26,6 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 
 	slog.Info("Initializing Pulumi stack", "stack", stackName, "workDir", absWorkDir)
 
-	// Initialize Stack (Pulumi stack select)
-	// Using LocalSource as our Pulumi code is a generic local folder
-	// Use Upsert to create if missing, or select if existing (idempotent)
 	env := map[string]string{
 		"PATH": fmt.Sprintf("%s:%s", filepath.Join(filepath.Dir(filepath.Dir(absWorkDir)), "fake-go"), os.Getenv("PATH")),
 	}
@@ -41,7 +34,6 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 		return nil, fmt.Errorf("failed to initialize stack: %w", err)
 	}
 
-	//Set configuration from user request
 	for k, v := range configMap {
 		if err := s.SetConfig(ctx, k, auto.ConfigValue{Value: v}); err != nil {
 			return nil, err
@@ -50,14 +42,11 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 
 	slog.Info("Starting infrastructure update... check stdout for progress bars")
 
-	//Running pulumi up
-	// Mapping underlying pulumi engine to our stdout to see the progress bars
 	res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 	if err != nil {
-		return nil, fmt.Errorf("Infra update failed: %w", err)
+		return nil, fmt.Errorf("infra update failed: %w", err)
 	}
 
-	//Retrieving Public IP from outputs
 	outputs := res.Outputs
 	publicIp, ok := outputs["publicIp"].Value.(string)
 	if !ok {
@@ -67,11 +56,10 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 	slog.Info("Infrastructure provisioned successfully", "publicIp", publicIp)
 
 	return &ClusterData{
-		PublicIp: publicIp,
+		PublicIP: publicIp,
 	}, nil
 }
 
-// Runs pulumi destroy programmatically
 func DestroyCluster(ctx context.Context, stackName string, workDir string) error {
 	absWorkDir, err := filepath.Abs(workDir)
 	if err != nil {

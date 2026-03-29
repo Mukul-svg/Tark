@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -13,7 +12,6 @@ import (
 )
 
 type Client struct {
-	mu        sync.RWMutex
 	clientset kubernetes.Interface
 }
 
@@ -57,18 +55,8 @@ func NewFromKubeConfig(configBytes []byte) (*Client, error) {
 	return &Client{clientset: kubeClient}, nil
 }
 
-// GetK8s safely retrieves the underlying kubernetes interface
 func (c *Client) GetK8s() kubernetes.Interface {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.clientset
-}
-
-// SetK8s safely updates the underlying kubernetes interface
-func (c *Client) SetK8s(newClient kubernetes.Interface) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.clientset = newClient
 }
 
 func getKubeConfig() (*rest.Config, error) {

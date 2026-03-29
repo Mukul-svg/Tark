@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"regexp"
+	"simplek8/internal/cache"
 	"simplek8/internal/kube"
 	"simplek8/internal/queue"
 	"simplek8/internal/store"
@@ -93,20 +94,12 @@ func (s *Server) registerHandlers() {
 	s.mux.HandleFunc(queue.TaskTypeDestroyCluster, s.handleDestroyClusterTask)
 }
 
-func modelTargetsKey(model string) string {
-	return "proxy:model:targets:" + strings.ToLower(model)
-}
-
-func modelRoundRobinKey(model string) string {
-	return "proxy:model:rr:" + strings.ToLower(model)
-}
-
 func (s *Server) invalidateModelCache(ctx context.Context, model string) {
 	if s.rdb == nil || strings.TrimSpace(model) == "" {
 		return
 	}
 
-	if err := s.rdb.Del(ctx, modelTargetsKey(model), modelRoundRobinKey(model)).Err(); err != nil {
+	if err := s.rdb.Del(ctx, cache.ModelTargetsKey(model), cache.ModelRoundRobinKey(model)).Err(); err != nil {
 		slog.Warn("failed to invalidate model cache from worker", "model", model, "error", err)
 	}
 }
@@ -132,22 +125,22 @@ func (s *Server) handleProvisionClusterTask(ctx context.Context, task *asynq.Tas
 		return fmt.Errorf("provision cluster: %w", err)
 	}
 
-	configBytes, err := fetchKubeconfigWithRetry(clusterData.PublicIp, payload.SSHKeyPath)
+	configBytes, err := fetchKubeconfigWithRetry(clusterData.PublicIP, payload.SSHKeyPath)
 	if err != nil {
 		_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
 		return err
 	}
 
 	re := regexp.MustCompile(`server: https://.*:16443`)
-	newServerLine := fmt.Sprintf("server: https://%s:16443", clusterData.PublicIp)
+	newServerLine := fmt.Sprintf("server: https://%s:16443", clusterData.PublicIP)
 	configBytes = re.ReplaceAll(configBytes, []byte(newServerLine))
 
-	if err := s.store.UpdateClusterDetails(ctx, clusterID, "active", string(configBytes), clusterData.PublicIp); err != nil {
+	if err := s.store.UpdateClusterDetails(ctx, clusterID, "active", string(configBytes), clusterData.PublicIP); err != nil {
 		_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
 		return fmt.Errorf("update cluster details: %w", err)
 	}
 
-	slog.Info("provision task completed", "jobId", payload.JobID, "clusterId", clusterID, "publicIp", clusterData.PublicIp)
+	slog.Info("provision task completed", "jobId", payload.JobID, "clusterId", clusterID, "publicIp", clusterData.PublicIP)
 	return nil
 }
 

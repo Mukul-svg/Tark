@@ -24,13 +24,11 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 	}
 	labels := map[string]string{"app": name}
 
-	// 1. Ensure Deployment
 	_, err := c.GetK8s().AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		// Create Deployment: Llama.cpp CPU optimized
 		replicas := int32(1)
 		deployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -44,7 +42,6 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{Labels: labels},
 					Spec: corev1.PodSpec{
-						// Using a shared emptyDir volume to pass the model from init-container to main container
 						Volumes: []corev1.Volume{
 							{
 								Name: "model-storage",
@@ -74,7 +71,7 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 						Containers: []corev1.Container{
 							{
 								Name:  "llama-cpp",
-								Image: "ghcr.io/ggml-org/llama.cpp:server",
+								Image: "ghcr.io/ggml-org/llama.cpp:server-b4731",
 								Args: []string{
 									"-m", "/data/model.gguf",
 									"--host", "0.0.0.0",
@@ -109,13 +106,11 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 		}
 	}
 
-	// 2. Ensure Service
 	_, err = c.GetK8s().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		// Create Service
 		service := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -131,7 +126,7 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 						NodePort:   cfg.NodePort,
 					},
 				},
-				Type: corev1.ServiceTypeNodePort, // Expose externally
+				Type: corev1.ServiceTypeNodePort,
 			},
 		}
 		if _, err := c.GetK8s().CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
@@ -147,13 +142,11 @@ func (c *Client) DeleteModel(ctx context.Context, namespace string, name string)
 		name = "vllm"
 	}
 
-	// Delete Service
 	err := c.GetK8s().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 
-	// Delete Deployment
 	err = c.GetK8s().AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err

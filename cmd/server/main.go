@@ -12,13 +12,11 @@ import (
 )
 
 func main() {
-	// Entry point for the server application
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	cfg := config.Load()
 
-	// 1. Initialize Database
 	ctx := context.Background()
 	db, err := store.NewPostgresStore(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -28,7 +26,6 @@ func main() {
 	defer db.Close()
 	slog.Info("Successfully connected to Database", "url", cfg.DatabaseURL)
 
-	// 2. Initialize Cache
 	rdb, err := cache.NewRedisCache(ctx, cfg.RedisAddr, cfg.RedisPassword, 0)
 	if err != nil {
 		slog.Error("Failed to initialize redis cache", "error", err)
