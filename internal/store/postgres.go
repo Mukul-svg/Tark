@@ -132,8 +132,9 @@ func (s *PostgresStore) GetClusterByName(ctx context.Context, name string) (*mod
 
 func (s *PostgresStore) ListClusters(ctx context.Context, orgID uuid.UUID) ([]models.Cluster, error) {
 	query := `
-		SELECT id, org_id, name, region, status, kubeconfig, public_ip, created_at, updated_at
+		SELECT id, org_id, name, region, status, public_ip, created_at, updated_at
 		FROM clusters WHERE org_id = $1
+		ORDER BY created_at DESC
 	`
 	rows, err := s.pool.Query(ctx, query, orgID)
 	if err != nil {
@@ -146,7 +147,7 @@ func (s *PostgresStore) ListClusters(ctx context.Context, orgID uuid.UUID) ([]mo
 		var c models.Cluster
 		err := rows.Scan(
 			&c.ID, &c.OrgID, &c.Name, &c.Region, &c.Status,
-			&c.Kubeconfig, &c.PublicIP, &c.CreatedAt, &c.UpdatedAt,
+			&c.PublicIP, &c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -172,15 +173,26 @@ func (s *PostgresStore) UpdateClusterDetails(ctx context.Context, id uuid.UUID, 
 	return err
 }
 
+func (s *PostgresStore) ResetCluster(ctx context.Context, id uuid.UUID, region string, status string) error {
+	query := `
+		UPDATE clusters 
+		SET status = $1, region = $2, kubeconfig = '', public_ip = '', updated_at = NOW() 
+		WHERE id = $3
+	`
+	_, err := s.pool.Exec(ctx, query, status, region, id)
+	return err
+}
+
 // --- Deployment Methods ---
 
 func (s *PostgresStore) CreateDeployment(ctx context.Context, deployment *models.Deployment) error {
 	query := `
-		INSERT INTO deployments (id, cluster_id, model_name, replicas, status, service_url, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO deployments (id, cluster_id, model_name, namespace, node_port, model_url, replicas, status, service_url, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err := s.pool.Exec(ctx, query,
-		deployment.ID, deployment.ClusterID, deployment.ModelName, deployment.Replicas,
+		deployment.ID, deployment.ClusterID, deployment.ModelName, deployment.Namespace,
+		deployment.NodePort, deployment.ModelURL, deployment.Replicas,
 		deployment.Status, deployment.ServiceURL, deployment.CreatedAt, deployment.UpdatedAt,
 	)
 	return err
@@ -188,13 +200,13 @@ func (s *PostgresStore) CreateDeployment(ctx context.Context, deployment *models
 
 func (s *PostgresStore) GetDeployment(ctx context.Context, id uuid.UUID) (*models.Deployment, error) {
 	query := `
-		SELECT id, cluster_id, model_name, replicas, status, service_url, created_at, updated_at
+		SELECT id, cluster_id, model_name, namespace, node_port, model_url, replicas, status, service_url, created_at, updated_at
 		FROM deployments WHERE id = $1
 	`
 	var d models.Deployment
 	err := s.pool.QueryRow(ctx, query, id).Scan(
-		&d.ID, &d.ClusterID, &d.ModelName, &d.Replicas, &d.Status,
-		&d.ServiceURL, &d.CreatedAt, &d.UpdatedAt,
+		&d.ID, &d.ClusterID, &d.ModelName, &d.Namespace, &d.NodePort, &d.ModelURL,
+		&d.Replicas, &d.Status, &d.ServiceURL, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -203,6 +215,33 @@ func (s *PostgresStore) GetDeployment(ctx context.Context, id uuid.UUID) (*model
 		return nil, err
 	}
 	return &d, nil
+}
+
+func (s *PostgresStore) ListDeployments(ctx context.Context) ([]models.Deployment, error) {
+	query := `
+		SELECT id, cluster_id, model_name, namespace, node_port, model_url, replicas, status, service_url, created_at, updated_at
+		FROM deployments
+		ORDER BY created_at DESC
+	`
+	rows, err := s.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var deployments []models.Deployment
+	for rows.Next() {
+		var d models.Deployment
+		err := rows.Scan(
+			&d.ID, &d.ClusterID, &d.ModelName, &d.Namespace, &d.NodePort, &d.ModelURL,
+			&d.Replicas, &d.Status, &d.ServiceURL, &d.CreatedAt, &d.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, d)
+	}
+	return deployments, nil
 }
 
 func (s *PostgresStore) UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, status string) error {
@@ -221,12 +260,24 @@ func (s *PostgresStore) UpdateDeploymentServiceURL(ctx context.Context, id uuid.
 	return err
 }
 
+func (s *PostgresStore) UpdateDeploymentsStatusByCluster(ctx context.Context, clusterID uuid.UUID, status string) error {
+	query := `
+		UPDATE deployments
+		SET status = $1, updated_at = NOW()
+		WHERE cluster_id = $2 AND status != 'deleted' AND status != 'failed'
+	`
+	_, err := s.pool.Exec(ctx, query, status, clusterID)
+	return err
+}
+
 func (s *PostgresStore) ListActiveDeploymentTargets(ctx context.Context, modelName string) ([]string, error) {
 	query := `
 		SELECT d.service_url
 		FROM deployments d
+		JOIN clusters c ON d.cluster_id = c.id
 		WHERE d.model_name = $1
 		  AND d.status = 'active'
+		  AND c.status = 'active'
 		  AND d.service_url IS NOT NULL
 		  AND d.service_url <> ''
 		ORDER BY d.updated_at DESC

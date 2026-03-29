@@ -69,18 +69,38 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 	}
 
 	clusterID := uuid.New()
-	clusterRecord := &models.Cluster{
-		ID:        clusterID,
-		OrgID:     org.ID,
-		Name:      req.StackName,
-		Region:    region,
-		Status:    "provisioning",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	if err := h.store.CreateCluster(ctx, clusterRecord); err != nil {
-		slog.Error("Failed to create cluster record", "error", err)
-		return c.String(http.StatusInternalServerError, "Database error: failed to create cluster record")
+
+	if existingCluster, lookupErr := h.store.GetClusterByName(ctx, req.StackName); lookupErr == nil && existingCluster != nil {
+		if existingCluster.Status != "destroyed" && existingCluster.Status != "failed" {
+			slog.Warn("Cluster already exists and is not in a re-provisionable state", "name", req.StackName, "status", existingCluster.Status)
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error":     "Cluster with this stack name already exists",
+				"clusterId": existingCluster.ID.String(),
+				"status":    existingCluster.Status,
+			})
+		}
+
+		// Reuse the existing record for re-provisioning
+		slog.Info("Re-provisioning destroyed/failed cluster", "name", req.StackName, "oldStatus", existingCluster.Status)
+		clusterID = existingCluster.ID
+		if err := h.store.ResetCluster(ctx, clusterID, region, "provisioning"); err != nil {
+			slog.Error("Failed to reset cluster record", "error", err)
+			return c.String(http.StatusInternalServerError, "Database error: failed to reset cluster record")
+		}
+	} else {
+		clusterRecord := &models.Cluster{
+			ID:        clusterID,
+			OrgID:     org.ID,
+			Name:      req.StackName,
+			Region:    region,
+			Status:    "provisioning",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		if err := h.store.CreateCluster(ctx, clusterRecord); err != nil {
+			slog.Error("Failed to create cluster record", "error", err)
+			return c.String(http.StatusInternalServerError, "Database error: failed to create cluster record")
+		}
 	}
 
 	configMap := map[string]string{
@@ -143,7 +163,17 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	ctx := c.Request().Context()
 	clusterID := ""
 	if cluster, err := h.store.GetClusterByName(ctx, req.StackName); err == nil {
-		clusterID = cluster.ID.String()
+		// Only allow destroying clusters that are active or failed
+		switch cluster.Status {
+		case "active", "failed":
+			clusterID = cluster.ID.String()
+		case "destroyed":
+			return c.JSON(http.StatusConflict, map[string]string{"error": "cluster is already destroyed"})
+		case "provisioning", "installing":
+			return c.JSON(http.StatusConflict, map[string]string{"error": "cluster is still being provisioned, cannot destroy yet"})
+		default:
+			clusterID = cluster.ID.String()
+		}
 	}
 
 	jobID := uuid.NewString()
@@ -192,4 +222,19 @@ func (h *ProvisionHandler) ensureDefaultOrganization(ctx context.Context) (*mode
 	}
 
 	return newOrg, nil
+}
+
+func (h *ProvisionHandler) HandleListClusters(c echo.Context) error {
+	ctx := c.Request().Context()
+	org, err := h.ensureDefaultOrganization(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to ensure default organization"})
+	}
+
+	clusters, err := h.store.ListClusters(ctx, org.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list clusters"})
+	}
+
+	return c.JSON(http.StatusOK, clusters)
 }

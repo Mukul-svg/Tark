@@ -10,5 +10,6 @@ const (
 const (
 	TaskTypeProvisionCluster = "cluster:provision"
 	TaskTypeDeployModel      = "model:deploy"
+	TaskTypeDeleteModel      = "model:delete"
 	TaskTypeDestroyCluster   = "cluster:destroy"
 )

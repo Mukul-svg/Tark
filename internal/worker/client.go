@@ -50,10 +50,23 @@ func (c *Client) EnqueueDeploy(task *asynq.Task, taskID string) (*asynq.TaskInfo
 		asynq.Queue(queue.QueueModelDeploy),
 		asynq.TaskID(taskID),
 		asynq.MaxRetry(3),
-		asynq.Timeout(10*time.Minute),
+		asynq.Timeout(20*time.Minute),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue deploy task: %w", err)
+	}
+	return info, nil
+}
+
+func (c *Client) EnqueueDeleteModel(task *asynq.Task, taskID string) (*asynq.TaskInfo, error) {
+	info, err := c.client.Enqueue(task,
+		asynq.Queue(queue.QueueModelDeploy),
+		asynq.TaskID(taskID),
+		asynq.MaxRetry(3),
+		asynq.Timeout(5*time.Minute),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("enqueue delete model task: %w", err)
 	}
 	return info, nil
 }

@@ -44,6 +44,9 @@ func NewServer(deployHandler *handlers.DeployHandler,
 	e.POST("/api/provision", provsionHandler.HandleProvision)
 	e.POST("/api/destroy", provsionHandler.HandleDestroy)
 	e.GET("/api/jobs/:id", jobsHandler.GetJobStatus)
+	e.GET("/api/clusters", provsionHandler.HandleListClusters)
+	e.GET("/api/deployments", deployHandler.HandleListDeployments)
+	e.DELETE("/api/deployments/:id", deployHandler.HandleDeleteDeployment)
 	return &Server{e: e}
 
 }

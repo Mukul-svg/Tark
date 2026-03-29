@@ -120,6 +120,12 @@ func (h *ProxyHandler) invalidateModelCache(ctx context.Context, model string) {
 	}
 }
 
+func (h *ProxyHandler) evictProxyTarget(target string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.proxyByTarget, target)
+}
+
 func isTargetHealthy(target string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(target))
 	if err != nil || parsed.Host == "" {
@@ -144,11 +150,13 @@ func isTargetHealthy(target string) bool {
 	return true
 }
 
-func filterHealthyTargets(targets []string) []string {
+func (h *ProxyHandler) filterHealthyTargets(targets []string) []string {
 	healthy := make([]string, 0, len(targets))
 	for _, target := range targets {
 		if isTargetHealthy(target) {
 			healthy = append(healthy, target)
+		} else {
+			h.evictProxyTarget(target)
 		}
 	}
 	return healthy
@@ -225,7 +233,7 @@ func (h *ProxyHandler) resolveModelTarget(ctx context.Context, model string) (st
 
 	targets, err := h.readTargetsFromCache(ctx, trimmedModel)
 	if err == nil && len(targets) > 0 {
-		healthyTargets := filterHealthyTargets(targets)
+		healthyTargets := h.filterHealthyTargets(targets)
 		if len(healthyTargets) > 0 {
 			if len(healthyTargets) != len(targets) {
 				h.setTargetsInCache(ctx, trimmedModel, healthyTargets)
@@ -253,7 +261,7 @@ func (h *ProxyHandler) resolveModelTarget(ctx context.Context, model string) (st
 		return "", fmt.Errorf("no active deployment found for model %q", trimmedModel)
 	}
 
-	healthyTargets := filterHealthyTargets(targets)
+	healthyTargets := h.filterHealthyTargets(targets)
 	if len(healthyTargets) == 0 {
 		h.invalidateModelCache(ctx, trimmedModel)
 		return "", fmt.Errorf("no healthy deployment target found for model %q", trimmedModel)

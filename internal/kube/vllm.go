@@ -141,3 +141,23 @@ func (c *Client) DeployModel(ctx context.Context, namespace string, cfg ModelCon
 
 	return nil
 }
+
+func (c *Client) DeleteModel(ctx context.Context, namespace string, name string) error {
+	if name == "" {
+		name = "vllm"
+	}
+
+	// Delete Service
+	err := c.GetK8s().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// Delete Deployment
+	err = c.GetK8s().AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}

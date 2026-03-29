@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"simplek8/internal/cache"
 	"simplek8/internal/config"
@@ -25,7 +26,8 @@ type App struct {
 func New(cfg *config.Config, st store.Store, c *cache.RedisCache, queueClient *worker.Client) (*App, error) {
 	kc, err := kube.New()
 	if err != nil {
-		return nil, err
+		// Local kube client is optional — all k8s operations go through the worker
+		slog.Warn("Local kubeconfig not available (this is fine if you only use remote clusters)", "error", err)
 	}
 
 	deployHandler := handlers.NewDeployHandler(st, queueClient)

@@ -1,3 +1,4 @@
 config:
   azure:location: southindia
+  azure:subscriptionId: eedbf17d-b90a-4eca-b9f2-56fb227825bb
   tark:location: southindia

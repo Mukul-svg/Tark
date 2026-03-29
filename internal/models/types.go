@@ -28,6 +28,9 @@ type Deployment struct {
 	ID         uuid.UUID `json:"id" db:"id"`
 	ClusterID  uuid.UUID `json:"cluster_id" db:"cluster_id"`
 	ModelName  string    `json:"model_name" db:"model_name"`
+	Namespace  string    `json:"namespace" db:"namespace"`
+	NodePort   int32     `json:"node_port" db:"node_port"`
+	ModelURL   string    `json:"model_url,omitempty" db:"model_url"`
 	Replicas   int       `json:"replicas" db:"replicas"`
 	Status     string    `json:"status" db:"status"`
 	ServiceURL string    `json:"service_url,omitempty" db:"service_url"`

@@ -11,6 +11,10 @@ import (
 // FetchRemoteKubeConfig connects the VM via SSH and fetches the kubeconfig file
 func FetchRemoteKubeConfig(hostIP string, privateKeyPath string) ([]byte, error) {
 	//Read private key
+	// Ensure correct permissions (SSH requires 0600)
+	if err := os.Chmod(privateKeyPath, 0600); err != nil {
+		return nil, fmt.Errorf("failed to set private key permissions: %v", err)
+	}
 	key, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key: %v", err)

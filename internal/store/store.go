@@ -20,12 +20,15 @@ type Store interface {
 	ListClusters(ctx context.Context, orgID uuid.UUID) ([]models.Cluster, error)
 	UpdateClusterStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateClusterDetails(ctx context.Context, id uuid.UUID, status string, kubeconfig string, publicIP string) error
+	ResetCluster(ctx context.Context, id uuid.UUID, region string, status string) error
 
 	// Deployment methods
 	CreateDeployment(ctx context.Context, deployment *models.Deployment) error
 	GetDeployment(ctx context.Context, id uuid.UUID) (*models.Deployment, error)
+	ListDeployments(ctx context.Context) ([]models.Deployment, error)
 	UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateDeploymentServiceURL(ctx context.Context, id uuid.UUID, status string, serviceURL string) error
+	UpdateDeploymentsStatusByCluster(ctx context.Context, clusterID uuid.UUID, status string) error
 	ListActiveDeploymentTargets(ctx context.Context, modelName string) ([]string, error)
 
 	// General

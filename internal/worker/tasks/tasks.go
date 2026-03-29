@@ -28,6 +28,14 @@ type DeployModelPayload struct {
 	NodePort     int32  `json:"nodePort"`
 }
 
+type DeleteModelPayload struct {
+	JobID        string `json:"jobId"`
+	DeploymentID string `json:"deploymentId"`
+	ClusterID    string `json:"clusterId"`
+	Namespace    string `json:"namespace"`
+	Name         string `json:"name"`
+}
+
 type DestroyClusterPayload struct {
 	JobID     string `json:"jobId"`
 	ClusterID string `json:"clusterId"`
@@ -49,6 +57,14 @@ func NewDeployModelTask(payload DeployModelPayload) (*asynq.Task, error) {
 		return nil, fmt.Errorf("marshal deploy payload: %w", err)
 	}
 	return asynq.NewTask(queue.TaskTypeDeployModel, data), nil
+}
+
+func NewDeleteModelTask(payload DeleteModelPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal delete model payload: %w", err)
+	}
+	return asynq.NewTask(queue.TaskTypeDeleteModel, data), nil
 }
 
 func NewDestroyClusterTask(payload DestroyClusterPayload) (*asynq.Task, error) {
@@ -79,6 +95,14 @@ func ParseDestroyClusterPayload(task *asynq.Task) (*DestroyClusterPayload, error
 	var payload DestroyClusterPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return nil, fmt.Errorf("unmarshal destroy payload: %w", err)
+	}
+	return &payload, nil
+}
+
+func ParseDeleteModelPayload(task *asynq.Task) (*DeleteModelPayload, error) {
+	var payload DeleteModelPayload
+	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal delete payload: %w", err)
 	}
 	return &payload, nil
 }

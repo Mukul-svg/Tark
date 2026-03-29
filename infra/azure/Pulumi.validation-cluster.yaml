@@ -1,4 +1,0 @@
-config:
-  azure:location: southindia
-  tark:location: southindia
-  tark:vmSize: Standard_NC4as_T4_v3

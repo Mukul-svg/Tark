@@ -41,12 +41,7 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 		return nil, fmt.Errorf("failed to initialize stack: %w", err)
 	}
 
-	//Set configuration
-	//Applying any custom config passed
-	if err := s.SetConfig(ctx, "azure:location", auto.ConfigValue{Value: "southindia"}); err != nil {
-		return nil, err
-	}
-
+	//Set configuration from user request
 	for k, v := range configMap {
 		if err := s.SetConfig(ctx, k, auto.ConfigValue{Value: v}); err != nil {
 			return nil, err
