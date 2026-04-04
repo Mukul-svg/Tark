@@ -67,6 +67,6 @@ func (s *Server) GracefulShutdown(timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := s.Shutdown(ctx); err != nil {
-		slog.Error("HTTP server shutdown timed out or failed", "error", err)
+		slog.Error("server shutdown timed out", "error", err)
 	}
 }

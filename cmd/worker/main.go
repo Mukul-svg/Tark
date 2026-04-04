@@ -21,7 +21,7 @@ func main() {
 
 	db, err := store.NewPostgresStore(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("Failed to initialize worker database", "error", err)
+		slog.Error("failed to initialize worker database", "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -31,13 +31,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	slog.Info("Starting worker", "redisAddr", cfg.RedisAddr, "concurrency", concurrency)
+	slog.Info("starting worker", "redisAddr", cfg.RedisAddr, "concurrency", concurrency)
 	if err := workerServer.Run(ctx); err != nil {
-		slog.Error("Worker stopped with error", "error", err)
+		slog.Error("worker stopped with error", "error", err)
 		os.Exit(1)
 	}
 
-	slog.Info("Worker stopped")
+	slog.Info("worker stopped")
 }
 
 func parseConcurrency(raw string, fallback int) int {

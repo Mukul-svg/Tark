@@ -184,25 +184,17 @@ This runs `docker compose up -d` and starts:
 - PostgreSQL on `localhost:5432`
 - Redis on `localhost:6379`
 
-### Step 3 — Apply the database schema
-
-```bash
-make migrate-init
-```
-
-This runs the SQL in `internal/store/migrations/001_init.sql` which creates the `organizations`, `clusters`, and `deployments` tables.
-
-> **Important:** If you wipe the database and re-run migrations, **all existing cluster and deployment records are deleted**. Any requests that reference old cluster UUIDs will fail with a foreign key error — this is expected and correct behavior.
-
-### Step 4 — Build the binaries
+### Step 3 — Build the binaries
 
 ```bash
 make build
 ```
 
-This compiles both `bin/server` and `bin/worker`.
+This compiles both `bin/server` and `bin/worker`. Migrations are applied automatically on server startup via an embedded migration runner that tracks applied versions in a `schema_migrations` table.
 
-### Step 5 — Run the API server and worker
+> **Important:** If you wipe the database, the migrations will run again on next server start.
+
+### Step 4 — Run the API server and worker
 
 Open two terminals:
 
@@ -387,10 +379,10 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - Worker graceful shutdown (SIGTERM handled)
 - API server graceful shutdown (SIGTERM + in-flight request draining with 30s timeout)
 - Cluster validation on deploy — rejects requests with invalid or non-existent cluster IDs
+- Structured error types via `internal/apierror` — consistent `{"code":"X","message":"Y"}` JSON shape across all handlers
 
 ### In Progress
 
-- [ ] Structured error types (`internal/apierror` package, consistent JSON across all handlers)
 - [ ] Durable `jobs` table in PostgreSQL — currently all job state lives in Redis (ephemeral)
 - [ ] `/readyz` readiness probe that checks DB + Redis before returning 200
 - [ ] Full deployment state machine (QUEUED → BUILDING → DEPLOYING → RUNNING / FAILED)
@@ -440,7 +432,7 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - [ ] GitHub Actions CI pipeline — lint → test → build → push on tag
 
 **Operational Readiness**
-- [ ] Automated DB migration runner (`goose` or `golang-migrate`) — currently requires manual SQL execution
+- [x] Automated DB migration runner — embedded migration runner in `internal/store/migrate.go` runs on startup, tracks versions in `schema_migrations` table
 - [ ] Helm chart for production Kubernetes deployment
 - [ ] Multi-replica API server support
 - [ ] Redis Sentinel / Cluster for high availability
@@ -462,11 +454,13 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 
 ---
 
-**`column "namespace" does not exist` error**
+**Unexpected column errors**
 
-> Your database has a stale `deployments` table from before the `namespace` column was added. Wipe and re-run migrations:
+> If you get column-not-found errors, the database may have been created before the migration was updated.
+> Wipe the database and restart the server — migrations run automatically on startup:
 > ```bash
-> make dev-down && make dev-up && make migrate-init
+> make dev-down && make dev-up
+> make run-server-bin
 > ```
 
 ---

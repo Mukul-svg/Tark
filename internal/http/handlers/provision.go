@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"simplek8/internal/apierror"
 	"simplek8/internal/models"
 	"simplek8/internal/store"
 	"simplek8/internal/worker"
@@ -45,11 +46,11 @@ func NewProvisionHandler(st store.Store, queueClient *worker.Client) *ProvisionH
 func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 	var req ProvisionRequest
 	if err := c.Bind(&req); err != nil {
-		slog.Error("Failed to parse provision request", "error", err)
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
+		slog.Error("failed to parse provision request", "error", err)
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
 	if req.StackName == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "stackName is required"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
 	}
 
 	cwd, _ := os.Getwd()
@@ -59,8 +60,8 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 	ctx := c.Request().Context()
 	org, err := h.ensureDefaultOrganization(ctx)
 	if err != nil {
-		slog.Error("Failed to ensure default organization", "error", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to ensure organization"})
+		slog.Error("failed to ensure default organization", "error", err)
+		return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to ensure organization", err))
 	}
 
 	region := req.Region
@@ -72,20 +73,20 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 
 	if existingCluster, lookupErr := h.store.GetClusterByName(ctx, req.StackName); lookupErr == nil && existingCluster != nil {
 		if existingCluster.Status != "destroyed" && existingCluster.Status != "failed" {
-			slog.Warn("Cluster already exists and is not in a re-provisionable state", "name", req.StackName, "status", existingCluster.Status)
-			return c.JSON(http.StatusConflict, map[string]string{
-				"error":     "Cluster with this stack name already exists",
+			slog.Warn("cluster already exists and is not in a re-provisionable state", "name", req.StackName, "status", existingCluster.Status)
+			return c.JSON(http.StatusConflict, map[string]any{
+				"code":      "ALREADY_EXISTS",
+				"message":   "cluster with this stack name already exists",
 				"clusterId": existingCluster.ID.String(),
 				"status":    existingCluster.Status,
 			})
 		}
 
-		// Reuse the existing record for re-provisioning
-		slog.Info("Re-provisioning destroyed/failed cluster", "name", req.StackName, "oldStatus", existingCluster.Status)
+		slog.Info("re-provisioning destroyed/failed cluster", "name", req.StackName, "oldStatus", existingCluster.Status)
 		clusterID = existingCluster.ID
 		if err := h.store.ResetCluster(ctx, clusterID, region, "provisioning"); err != nil {
-			slog.Error("Failed to reset cluster record", "error", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to reset cluster record"})
+			slog.Error("failed to reset cluster record", "error", err)
+			return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to reset cluster record", err))
 		}
 	} else {
 		clusterRecord := &models.Cluster{
@@ -98,8 +99,8 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 			UpdatedAt: time.Now(),
 		}
 		if err := h.store.CreateCluster(ctx, clusterRecord); err != nil {
-			slog.Error("Failed to create cluster record", "error", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: failed to create cluster record"})
+			slog.Error("failed to create cluster record", "error", err)
+			return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to create cluster record", err))
 		}
 	}
 
@@ -127,13 +128,13 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 
 	task, err := tasks.NewProvisionClusterTask(payload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create provision task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create provision task", err))
 	}
 
 	taskID := "provision:" + clusterID.String()
 	if _, err := h.queueClient.EnqueueProvision(task, taskID); err != nil {
-		slog.Error("Failed to enqueue provision task", "error", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to enqueue provision task"})
+		slog.Error("failed to enqueue provision task", "error", err)
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to enqueue provision task", err))
 	}
 
 	return c.JSON(http.StatusAccepted, ProvisionResponse{
@@ -151,10 +152,10 @@ type DestroyRequest struct {
 func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	var req DestroyRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request payload"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
 	if req.StackName == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Stack name is required"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
 	}
 
 	cwd, _ := os.Getwd()
@@ -163,14 +164,13 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	ctx := c.Request().Context()
 	clusterID := ""
 	if cluster, err := h.store.GetClusterByName(ctx, req.StackName); err == nil {
-		// Only allow destroying clusters that are active or failed
 		switch cluster.Status {
 		case "active", "failed":
 			clusterID = cluster.ID.String()
 		case "destroyed":
-			return c.JSON(http.StatusConflict, map[string]string{"error": "cluster is already destroyed"})
+			return apierror.Respond(c, apierror.ConflictErr(apierror.Conflict, "cluster is already destroyed"))
 		case "provisioning", "installing":
-			return c.JSON(http.StatusConflict, map[string]string{"error": "cluster is still being provisioned, cannot destroy yet"})
+			return apierror.Respond(c, apierror.ConflictErr(apierror.Conflict, "cluster is still being provisioned, cannot destroy yet"))
 		default:
 			clusterID = cluster.ID.String()
 		}
@@ -185,20 +185,20 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	}
 	task, err := tasks.NewDestroyClusterTask(payload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create destroy task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create destroy task", err))
 	}
 
 	taskID := "destroy:" + req.StackName
 	if _, err := h.queueClient.EnqueueDestroy(task, taskID); err != nil {
-		slog.Error("Failed to enqueue destroy task", "error", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to enqueue destroy task"})
+		slog.Error("failed to enqueue destroy task", "error", err)
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to enqueue destroy task", err))
 	}
 
-	return c.JSON(http.StatusAccepted, map[string]string{
-		"status": "queued",
-		"stack":  req.StackName,
-		"jobId":  jobID,
-		"taskId": taskID,
+	return c.JSON(http.StatusAccepted, map[string]any{
+		"jobId":     jobID,
+		"taskId":    taskID,
+		"stackName": req.StackName,
+		"status":    "queued",
 	})
 }
 
@@ -228,12 +228,12 @@ func (h *ProvisionHandler) HandleListClusters(c echo.Context) error {
 	ctx := c.Request().Context()
 	org, err := h.ensureDefaultOrganization(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to ensure default organization"})
+		return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to ensure organization", err))
 	}
 
 	clusters, err := h.store.ListClusters(ctx, org.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list clusters"})
+		return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to list clusters", err))
 	}
 
 	return c.JSON(http.StatusOK, clusters)

@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"log/slog"
 	"simplek8/internal/models"
 
 	"github.com/google/uuid"
@@ -14,22 +16,29 @@ type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
+
 func NewPostgresStore(ctx context.Context, connString string) (*PostgresStore, error) {
-	// Parse the configuration including params like pool_max_conns
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse database config: %w", err)
 	}
 
-	// Create the pool
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
-	// Verify connection
 	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("unable to ping database: %w", err)
+	}
+
+	slog.Info("running migrations")
+	if err := RunEmbeddedMigrations(ctx, pool); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
 	return &PostgresStore{pool: pool}, nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"simplek8/internal/apierror"
 	"simplek8/internal/models"
 	"simplek8/internal/store"
 	"simplek8/internal/worker"
@@ -46,7 +47,7 @@ type deployResponse struct {
 func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	req := new(deployRequest)
 	if err := c.Bind(req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
 
 	if req.Namespace == "" {
@@ -55,7 +56,6 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	if req.Name == "" {
 		req.Name = "vllm"
 	} else {
-		// Kubernetes requires valid DNS-1123 subdomains for names.
 		req.Name = strings.ReplaceAll(req.Name, "_", "-")
 		req.Name = strings.ToLower(req.Name)
 	}
@@ -67,13 +67,13 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	}
 
 	if req.NodePort < 30000 || req.NodePort > 32767 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "nodePort must be between 30000 and 32767"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "nodePort must be between 30000 and 32767"))
 	}
 
 	ctx := c.Request().Context()
-	clusterID, err := h.resolveClusterID(ctx, req.ClusterID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	clusterID, apiErr := h.resolveClusterID(ctx, req.ClusterID)
+	if apiErr != nil {
+		return apierror.Respond(c, apiErr)
 	}
 
 	deploymentID := uuid.New()
@@ -90,8 +90,8 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 		UpdatedAt: time.Now(),
 	}
 	if err := h.store.CreateDeployment(ctx, deployment); err != nil {
-		slog.Error("Failed to create deployment record", "error", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create deployment record"})
+		slog.Error("failed to create deployment record", "error", err)
+		return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to create deployment record", err))
 	}
 
 	jobID := uuid.NewString()
@@ -106,12 +106,12 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	}
 	task, err := tasks.NewDeployModelTask(payload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create deploy task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create deploy task", err))
 	}
 
 	taskID := "deploy:" + deploymentID.String()
 	if _, err := h.queueClient.EnqueueDeploy(task, taskID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to enqueue deploy task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to enqueue deploy task", err))
 	}
 
 	return c.JSON(http.StatusAccepted, &deployResponse{
@@ -122,30 +122,30 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	})
 }
 
-func (h *DeployHandler) resolveClusterID(ctx context.Context, clusterIDRaw string) (uuid.UUID, error) {
+// resolveClusterID validates and returns the cluster UUID, or an apierror.
+func (h *DeployHandler) resolveClusterID(ctx context.Context, clusterIDRaw string) (uuid.UUID, *apierror.Error) {
 	if clusterIDRaw != "" {
 		clusterID, err := uuid.Parse(clusterIDRaw)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("invalid clusterId: %w", err)
+			return uuid.Nil, apierror.BadRequest(apierror.InvalidRequestField, "invalid clusterId")
 		}
-		// Verify the cluster exists and is usable
 		cluster, err := h.store.GetCluster(ctx, clusterID)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("cluster not found: %s", clusterIDRaw)
+			return uuid.Nil, apierror.BadRequest(apierror.NotFound, "cluster not found")
 		}
 		if cluster.Status != "active" {
-			return uuid.Nil, fmt.Errorf("cluster %s is not active (status: %s)", clusterIDRaw, cluster.Status)
+			return uuid.Nil, apierror.BadRequest(apierror.Conflict, fmt.Sprintf("cluster is not active (status: %s)", cluster.Status))
 		}
 		return clusterID, nil
 	}
 
 	org, err := h.store.GetOrganizationByName(ctx, "default")
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("default organization not found")
+		return uuid.Nil, apierror.Internal(apierror.StoreError, "default organization not found", err)
 	}
 	clusters, err := h.store.ListClusters(ctx, org.ID)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to list clusters")
+		return uuid.Nil, apierror.Internal(apierror.StoreError, "failed to list clusters", err)
 	}
 	for _, cluster := range clusters {
 		if cluster.Status == "active" {
@@ -153,14 +153,14 @@ func (h *DeployHandler) resolveClusterID(ctx context.Context, clusterIDRaw strin
 		}
 	}
 
-	return uuid.Nil, fmt.Errorf("no active cluster found; provide clusterId")
+	return uuid.Nil, apierror.BadRequest(apierror.InvalidRequestField, "no active cluster found; provide clusterId")
 }
 
 func (h *DeployHandler) HandleListDeployments(c echo.Context) error {
 	ctx := c.Request().Context()
 	deployments, err := h.store.ListDeployments(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list deployments"})
+		return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to list deployments", err))
 	}
 	return c.JSON(http.StatusOK, deployments)
 }
@@ -169,22 +169,18 @@ func (h *DeployHandler) HandleDeleteDeployment(c echo.Context) error {
 	idParam := c.Param("id")
 	deploymentID, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid deployment id"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.NotFound, "invalid deployment id"))
 	}
 
 	ctx := c.Request().Context()
 	deployment, err := h.store.GetDeployment(ctx, deploymentID)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "deployment not found"})
+		return apierror.Respond(c, apierror.NotFoundCode(apierror.NotFound, "deployment not found"))
 	}
 
-	// Guard: reject delete on already-terminal deployments
 	switch deployment.Status {
 	case "deleted", "deleting", "orphaned":
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error":  "deployment is already in terminal state",
-			"status": deployment.Status,
-		})
+		return apierror.Respond(c, apierror.ConflictErr(apierror.Conflict, fmt.Sprintf("deployment is already in terminal state (%s)", deployment.Status)))
 	}
 
 	ns := deployment.Namespace
@@ -203,15 +199,15 @@ func (h *DeployHandler) HandleDeleteDeployment(c echo.Context) error {
 
 	task, err := tasks.NewDeleteModelTask(payload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create delete task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create delete task", err))
 	}
 
 	taskID := "delete:" + deploymentID.String()
 	if _, err := h.queueClient.EnqueueDeleteModel(task, taskID); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to enqueue delete task"})
+		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to enqueue delete task", err))
 	}
 
-	return c.JSON(http.StatusAccepted, map[string]string{
+	return c.JSON(http.StatusAccepted, map[string]any{
 		"jobId":        jobID,
 		"taskId":       taskID,
 		"deploymentId": deploymentID.String(),

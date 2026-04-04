@@ -24,7 +24,7 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 		return nil, err
 	}
 
-	slog.Info("Initializing Pulumi stack", "stack", stackName, "workDir", absWorkDir)
+	slog.Info("initializing Pulumi stack", "stack", stackName, "workDir", absWorkDir)
 
 	env := map[string]string{
 		"PATH": fmt.Sprintf("%s:%s", filepath.Join(filepath.Dir(filepath.Dir(absWorkDir)), "fake-go"), os.Getenv("PATH")),
@@ -40,7 +40,7 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 		}
 	}
 
-	slog.Info("Starting infrastructure update... check stdout for progress bars")
+	slog.Info("starting infrastructure update")
 
 	res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 	if err != nil {
@@ -53,7 +53,7 @@ func ProvisionCluster(ctx context.Context, stackName string, workDir string, con
 		return nil, fmt.Errorf("failed to get publicIp from stack outputs")
 	}
 
-	slog.Info("Infrastructure provisioned successfully", "publicIp", publicIp)
+	slog.Info("infrastructure provisioned", "publicIp", publicIp)
 
 	return &ClusterData{
 		PublicIP: publicIp,
@@ -66,7 +66,7 @@ func DestroyCluster(ctx context.Context, stackName string, workDir string) error
 		return err
 	}
 
-	slog.Info("Initializing Pulumi stack for destruction", "stack", stackName)
+	slog.Info("initializing Pulumi stack for destruction", "stack", stackName)
 
 	env := map[string]string{
 		"PATH": fmt.Sprintf("%s:%s", filepath.Join(filepath.Dir(filepath.Dir(absWorkDir)), "fake-go"), os.Getenv("PATH")),
@@ -76,7 +76,7 @@ func DestroyCluster(ctx context.Context, stackName string, workDir string) error
 		return fmt.Errorf("failed to initialize stack: %w", err)
 	}
 
-	slog.Info("Starting infrastructure destruction...")
+	slog.Info("infrastructure destruction started")
 
 	// Verify stack exists/refresh state could be useful but destroy handles it.
 	_, err = s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout))
@@ -84,6 +84,6 @@ func DestroyCluster(ctx context.Context, stackName string, workDir string) error
 		return fmt.Errorf("infra destroy failed: %w", err)
 	}
 
-	slog.Info("Infrastructure destroyed successfully")
+	slog.Info("infrastructure destroyed")
 	return nil
 }

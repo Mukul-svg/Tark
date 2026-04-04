@@ -24,7 +24,7 @@ help:
 	@echo "  make dev-up         - Start local Postgres and Redis with Docker Compose"
 	@echo "  make dev-down       - Stop local Docker Compose services"
 	@echo "  make dev-logs       - Follow Docker Compose logs"
-	@echo "  make migrate-init   - Apply initial SQL schema using psql"
+	@echo "  make migrate-init   - Apply initial SQL schema (deprecated, now automatic)"
 	@echo "  make build          - Build server and worker binaries"
 	@echo "  make build-server   - Build server binary"
 	@echo "  make build-worker   - Build worker binary"

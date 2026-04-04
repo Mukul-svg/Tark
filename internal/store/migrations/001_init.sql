@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS clusters (
     name TEXT NOT NULL,
     region TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'provisioning',
-    kubeconfig TEXT, -- encrypted in app layer or just text for now. TODO- Encrypt
+    kubeconfig TEXT,
     public_ip TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

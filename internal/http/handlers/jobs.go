@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"simplek8/internal/apierror"
 	"simplek8/internal/worker"
 
 	"github.com/labstack/echo/v4"
@@ -18,12 +19,12 @@ func NewJobsHandler(queueClient *worker.Client) *JobsHandler {
 func (h *JobsHandler) GetJobStatus(c echo.Context) error {
 	taskID := c.Param("id")
 	if taskID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "job id is required"})
+		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "job id is required"))
 	}
 
 	taskInfo, err := h.queueClient.GetTaskInfo(taskID)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
+		return apierror.Respond(c, apierror.NotFoundCode(apierror.NotFound, "job not found"))
 	}
 
 	return c.JSON(http.StatusOK, taskInfo)
