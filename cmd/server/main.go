@@ -44,7 +44,7 @@ func main() {
 	}
 
 	slog.Info("Starting server application", "port", cfg.Port)
-	if err := application.Run(); err != nil {
+	if err := application.RunWithGracefulShutdown(); err != nil {
 		slog.Error("Application encountered an error", "error", err)
 		os.Exit(1)
 	}

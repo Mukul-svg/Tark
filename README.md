@@ -26,9 +26,9 @@ Tark is a Go-based backend system that does two main things:
 
 Think of it as a simplified, self-hosted version of what cloud providers like AWS SageMaker or Azure ML do — but one you own entirely and can learn from.
 
-> **Why build this?** It's a practical way to learn distributed systems, Kubernetes, async job processing, reverse proxying, and cloud infrastructure — all in one real project. Yes, I have used AI tools for this project.
+> **Why build this?** It's a practical way to learn distributed systems, Kubernetes, async job processing, reverse proxying, and cloud infrastructure — all in one real project.
 ---
-**Disclaimer about AI usage** - Yes, I used AI to ask questions, refactor code, understand concepts, fixing bugs, making notes, making documents. I have not used AI to generate the entire project. I have used AI as a tool to help me build this project. Again, this is a personal project for my own learning.
+**Disclaimer about AI usage** - Yes, I have used AI to ask questions, refactor code, understand concepts, fixing bugs, making notes, making documents. I have not used AI to generate the entire project. I have used AI as a tool to help me build this project. No vibe coding has been done.
 
 ## Table of Contents
 
@@ -385,11 +385,11 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - Round-robin load balancing with TCP health probing
 - Cache invalidation on deploy/fail
 - Worker graceful shutdown (SIGTERM handled)
+- API server graceful shutdown (SIGTERM + in-flight request draining with 30s timeout)
 - Cluster validation on deploy — rejects requests with invalid or non-existent cluster IDs
 
 ### In Progress
 
-- [ ] API server graceful shutdown (SIGTERM + in-flight request draining)
 - [ ] Structured error types (`internal/apierror` package, consistent JSON across all handlers)
 - [ ] Durable `jobs` table in PostgreSQL — currently all job state lives in Redis (ephemeral)
 - [ ] `/readyz` readiness probe that checks DB + Redis before returning 200

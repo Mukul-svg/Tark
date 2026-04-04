@@ -1,8 +1,10 @@
 package http
 
 import (
+	"context"
 	"log/slog"
 	"simplek8/internal/http/handlers"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -52,4 +54,19 @@ func NewServer(deployHandler *handlers.DeployHandler,
 }
 func (s *Server) Start(address string) error {
 	return s.e.Start(address)
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	slog.Info("shutting down HTTP server, draining in-flight requests")
+	return s.e.Shutdown(ctx)
+}
+
+// GracefulShutdown blocks until the server is stopped.
+// Call Start in a separate goroutine, then call this to wait for shutdown via SIGTERM/SIGINT.
+func (s *Server) GracefulShutdown(timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		slog.Error("HTTP server shutdown timed out or failed", "error", err)
+	}
 }

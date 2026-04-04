@@ -49,3 +49,4 @@ docs
 server
 worker
 fake-go
+.openclaude-profile.json
