@@ -18,7 +18,7 @@ type Cluster struct {
 	Name       string    `json:"name" db:"name"`
 	Region     string    `json:"region" db:"region"`
 	Status     string    `json:"status" db:"status"`
-	Kubeconfig string    `json:"-" db:"kubeconfig"` // Do not expose JSON by default
+	Kubeconfig string    `json:"-" db:"kubeconfig"`
 	PublicIP   string    `json:"public_ip,omitempty" db:"public_ip"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
@@ -36,4 +36,19 @@ type Deployment struct {
 	ServiceURL string    `json:"service_url,omitempty" db:"service_url"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type Job struct {
+	ID           uuid.UUID  `json:"id"`
+	JobID        string     `json:"job_id"`
+	TaskType     string     `json:"task_type"`
+	Status       string     `json:"status"`
+	Payload      string     `json:"payload"`
+	ClusterID    *string    `json:"cluster_id,omitempty"`
+	DeploymentID *string    `json:"deployment_id,omitempty"`
+	Error        *string    `json:"error,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 }

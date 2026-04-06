@@ -380,10 +380,10 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - API server graceful shutdown (SIGTERM + in-flight request draining with 30s timeout)
 - Cluster validation on deploy — rejects requests with invalid or non-existent cluster IDs
 - Structured error types via `internal/apierror` — consistent `{"code":"X","message":"Y"}` JSON shape across all handlers
+- Durable `jobs` table in PostgreSQL — job state persisted across server restarts with status tracking (queued, running, completed, failed)
 
 ### In Progress
 
-- [ ] Durable `jobs` table in PostgreSQL — currently all job state lives in Redis (ephemeral)
 - [ ] `/readyz` readiness probe that checks DB + Redis before returning 200
 - [ ] Full deployment state machine (QUEUED → BUILDING → DEPLOYING → RUNNING / FAILED)
 

@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"simplek8/internal/apierror"
 	"simplek8/internal/models"
+	"simplek8/internal/queue"
 	"simplek8/internal/store"
 	"simplek8/internal/worker"
 	"simplek8/internal/worker/tasks"
@@ -126,6 +128,10 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		Config:         configMap,
 	}
 
+	payloadJSON, _ := json.Marshal(payload)
+	clusterStr := clusterID.String()
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeProvisionCluster, string(payloadJSON), &clusterStr, nil)
+
 	task, err := tasks.NewProvisionClusterTask(payload)
 	if err != nil {
 		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create provision task", err))
@@ -162,27 +168,31 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	infraDir := filepath.Join(cwd, "infra", "azure")
 
 	ctx := c.Request().Context()
-	clusterID := ""
+	var clusterIDStr string
 	if cluster, err := h.store.GetClusterByName(ctx, req.StackName); err == nil {
 		switch cluster.Status {
 		case "active", "failed":
-			clusterID = cluster.ID.String()
+			clusterIDStr = cluster.ID.String()
 		case "destroyed":
 			return apierror.Respond(c, apierror.ConflictErr(apierror.Conflict, "cluster is already destroyed"))
 		case "provisioning", "installing":
 			return apierror.Respond(c, apierror.ConflictErr(apierror.Conflict, "cluster is still being provisioned, cannot destroy yet"))
 		default:
-			clusterID = cluster.ID.String()
+			clusterIDStr = cluster.ID.String()
 		}
 	}
 
 	jobID := uuid.NewString()
 	payload := tasks.DestroyClusterPayload{
 		JobID:     jobID,
-		ClusterID: clusterID,
+		ClusterID: clusterIDStr,
 		StackName: req.StackName,
 		InfraDir:  infraDir,
 	}
+
+	payloadJSON, _ := json.Marshal(payload)
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDestroyCluster, string(payloadJSON), &clusterIDStr, nil)
+
 	task, err := tasks.NewDestroyClusterTask(payload)
 	if err != nil {
 		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create destroy task", err))

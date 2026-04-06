@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"log/slog"

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"log/slog"
@@ -310,4 +311,116 @@ func (s *PostgresStore) ListActiveDeploymentTargets(ctx context.Context, modelNa
 	}
 
 	return targets, nil
+}
+
+// --- Job Methods ---
+
+func (s *PostgresStore) CreateJob(ctx context.Context, job *models.Job) error {
+	query := `
+		INSERT INTO jobs (id, job_id, task_type, status, payload, cluster_id, deployment_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`
+	if job.ID == uuid.Nil {
+		job.ID = uuid.New()
+	}
+	_, err := s.pool.Exec(ctx, query,
+		job.ID, job.JobID, job.TaskType, job.Status, job.Payload,
+		job.ClusterID, job.DeploymentID, job.CreatedAt, job.UpdatedAt,
+	)
+	return err
+}
+
+func (s *PostgresStore) GetJob(ctx context.Context, jobID string) (*models.Job, error) {
+	query := `
+		SELECT id, job_id, task_type, status, payload,
+		       cluster_id, deployment_id, error,
+		       created_at, updated_at, started_at, completed_at
+		FROM jobs WHERE job_id = $1
+	`
+	var j models.Job
+	var clusterID, deploymentID, errMsg sql.NullString
+	var startedAt, completedAt sql.NullTime
+
+	err := s.pool.QueryRow(ctx, query, jobID).Scan(
+		&j.ID, &j.JobID, &j.TaskType, &j.Status, &j.Payload,
+		&clusterID, &deploymentID, &errMsg,
+		&j.CreatedAt, &j.UpdatedAt, &startedAt, &completedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("job not found")
+		}
+		return nil, err
+	}
+
+	mapNullableFields(&j, clusterID, deploymentID, errMsg, startedAt, completedAt)
+	return &j, nil
+}
+
+func (s *PostgresStore) ListJobs(ctx context.Context) ([]models.Job, error) {
+	query := `
+		SELECT id, job_id, task_type, status, payload,
+		       cluster_id, deployment_id, error,
+		       created_at, updated_at, started_at, completed_at
+		FROM jobs
+		ORDER BY created_at DESC
+	`
+	rows, err := s.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var jobs []models.Job
+	for rows.Next() {
+		var j models.Job
+		var clusterID, deploymentID, errMsg sql.NullString
+		var startedAt, completedAt sql.NullTime
+
+		if err := rows.Scan(
+			&j.ID, &j.JobID, &j.TaskType, &j.Status, &j.Payload,
+			&clusterID, &deploymentID, &errMsg,
+			&j.CreatedAt, &j.UpdatedAt, &startedAt, &completedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		mapNullableFields(&j, clusterID, deploymentID, errMsg, startedAt, completedAt)
+		jobs = append(jobs, j)
+	}
+	return jobs, nil
+}
+
+func mapNullableFields(
+	j *models.Job,
+	clusterID, deploymentID, errMsg sql.NullString,
+	startedAt, completedAt sql.NullTime,
+) {
+	if clusterID.Valid {
+		j.ClusterID = &clusterID.String
+	}
+	if deploymentID.Valid {
+		j.DeploymentID = &deploymentID.String
+	}
+	if errMsg.Valid {
+		j.Error = &errMsg.String
+	}
+	if startedAt.Valid {
+		j.StartedAt = &startedAt.Time
+	}
+	if completedAt.Valid {
+		j.CompletedAt = &completedAt.Time
+	}
+}
+
+func (s *PostgresStore) UpdateJobStatus(ctx context.Context, jobID string, status string, errMsg string) error {
+	query := `
+		UPDATE jobs
+		SET status = $1, error = NULLIF($2, ''), updated_at = NOW(),
+		    started_at = CASE WHEN $1 = 'running' AND started_at IS NULL THEN NOW() ELSE started_at END,
+		    completed_at = CASE WHEN $1 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+		WHERE job_id = $3
+	`
+	_, err := s.pool.Exec(ctx, query, status, errMsg, jobID)
+	return err
 }

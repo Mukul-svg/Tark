@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"simplek8/internal/apierror"
 	"simplek8/internal/models"
+	"simplek8/internal/queue"
 	"simplek8/internal/store"
 	"simplek8/internal/worker"
 	"simplek8/internal/worker/tasks"
@@ -104,6 +106,12 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 		ModelURL:     req.ModelURL,
 		NodePort:     req.NodePort,
 	}
+
+	payloadJSON, _ := json.Marshal(payload)
+	clusterStr := clusterID.String()
+	deploymentStr := deploymentID.String()
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDeployModel, string(payloadJSON), &clusterStr, &deploymentStr)
+
 	task, err := tasks.NewDeployModelTask(payload)
 	if err != nil {
 		return apierror.Respond(c, apierror.Internal(apierror.QueueError, "failed to create deploy task", err))

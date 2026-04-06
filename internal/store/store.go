@@ -31,6 +31,12 @@ type Store interface {
 	UpdateDeploymentsStatusByCluster(ctx context.Context, clusterID uuid.UUID, status string) error
 	ListActiveDeploymentTargets(ctx context.Context, modelName string) ([]string, error)
 
+	// Job methods
+	CreateJob(ctx context.Context, job *models.Job) error
+	GetJob(ctx context.Context, jobID string) (*models.Job, error)
+	ListJobs(ctx context.Context) ([]models.Job, error)
+	UpdateJobStatus(ctx context.Context, jobID string, status string, errorMsg string) error
+
 	// General
 	Close()
 }
