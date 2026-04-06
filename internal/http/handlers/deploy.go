@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -107,10 +106,9 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 		NodePort:     req.NodePort,
 	}
 
-	payloadJSON, _ := json.Marshal(payload)
 	clusterStr := clusterID.String()
 	deploymentStr := deploymentID.String()
-	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDeployModel, string(payloadJSON), &clusterStr, &deploymentStr)
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDeployModel, payload, &clusterStr, &deploymentStr)
 
 	task, err := tasks.NewDeployModelTask(payload)
 	if err != nil {

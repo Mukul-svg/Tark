@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -55,9 +54,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
 	}
 
-	cwd, _ := os.Getwd()
-	infraDir := filepath.Join(cwd, "infra", "azure")
-	sshKeyPath := filepath.Join(cwd, "infra", "azure", "azure_rsa")
+	infraDir, sshKeyPath := getInfraDir()
 
 	ctx := c.Request().Context()
 	org, err := h.ensureDefaultOrganization(ctx)
@@ -128,9 +125,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		Config:         configMap,
 	}
 
-	payloadJSON, _ := json.Marshal(payload)
-	clusterStr := clusterID.String()
-	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeProvisionCluster, string(payloadJSON), &clusterStr, nil)
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeProvisionCluster, payload, &payload.ClusterID, nil)
 
 	task, err := tasks.NewProvisionClusterTask(payload)
 	if err != nil {
@@ -164,8 +159,7 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
 	}
 
-	cwd, _ := os.Getwd()
-	infraDir := filepath.Join(cwd, "infra", "azure")
+	infraDir, _ := getInfraDir()
 
 	ctx := c.Request().Context()
 	var clusterIDStr string
@@ -190,8 +184,7 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 		InfraDir:  infraDir,
 	}
 
-	payloadJSON, _ := json.Marshal(payload)
-	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDestroyCluster, string(payloadJSON), &clusterIDStr, nil)
+	CreateJobRecord(ctx, h.store, jobID, queue.TaskTypeDestroyCluster, payload, &clusterIDStr, nil)
 
 	task, err := tasks.NewDestroyClusterTask(payload)
 	if err != nil {
@@ -247,4 +240,10 @@ func (h *ProvisionHandler) HandleListClusters(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, clusters)
+}
+
+func getInfraDir() (infraDir, sshKeyPath string) {
+	cwd, _ := os.Getwd()
+	base := filepath.Join(cwd, "infra", "azure")
+	return base, filepath.Join(base, "azure_rsa")
 }

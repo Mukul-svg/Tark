@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"simplek8/internal/apierror"
@@ -42,12 +43,17 @@ func (h *JobsHandler) ListJobs(c echo.Context) error {
 	return c.JSON(http.StatusOK, jobs)
 }
 
-func CreateJobRecord(ctx context.Context, st store.Store, jobID, taskType, payload string, clusterID, deploymentID *string) *models.Job {
+func CreateJobRecord(ctx context.Context, st store.Store, jobID, taskType string, payload any, clusterID, deploymentID *string) *models.Job {
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		slog.Warn("failed to marshal job payload", "jobId", jobID, "error", err)
+		return nil
+	}
 	job := &models.Job{
 		JobID:    jobID,
 		TaskType: taskType,
 		Status:   "queued",
-		Payload:  payload,
+		Payload:  string(payloadJSON),
 	}
 	if clusterID != nil {
 		job.ClusterID = clusterID
