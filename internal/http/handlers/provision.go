@@ -19,10 +19,10 @@ import (
 )
 
 type ProvisionRequest struct {
-	StackName      string `json:"stackName"`
-	Region         string `json:"region"`
-	VMSize         string `json:"vmSize"`
-	SubscriptionID string `json:"subscriptionId"`
+	StackName      string `json:"stackName" validate:"required,min=3,max=63"`
+	Region         string `json:"region" validate:"omitempty,min=3"`
+	VMSize         string `json:"vmSize" validate:"omitempty"`
+	SubscriptionID string `json:"subscriptionId" validate:"omitempty,uuid4"`
 }
 
 type ProvisionResponse struct {
@@ -50,8 +50,8 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 		slog.Error("failed to parse provision request", "error", err)
 		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
-	if req.StackName == "" {
-		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
+	if err := c.Validate(&req); err != nil {
+		return apierror.Respond(c, validationError(err))
 	}
 
 	infraDir, sshKeyPath := getInfraDir()
@@ -147,7 +147,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 }
 
 type DestroyRequest struct {
-	StackName string `json:"stackName"`
+	StackName string `json:"stackName" validate:"required,min=3,max=63"`
 }
 
 func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
@@ -155,8 +155,8 @@ func (h *ProvisionHandler) HandleDestroy(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
-	if req.StackName == "" {
-		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "stackName is required"))
+	if err := c.Validate(&req); err != nil {
+		return apierror.Respond(c, validationError(err))
 	}
 
 	infraDir, _ := getInfraDir()

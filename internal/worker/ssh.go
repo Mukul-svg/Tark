@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -43,9 +44,12 @@ func FetchRemoteKubeConfig(hostIP string, privateKeyPath string) ([]byte, error)
 	}
 	defer session.Close()
 
+	var stderrBuf bytes.Buffer
+	session.Stderr = &stderrBuf
+
 	output, err := session.Output("cat /home/azureuser/client.config")
 	if err != nil {
-		return nil, fmt.Errorf("failed to run command to fetch kubeconfig: %v", err)
+		return nil, fmt.Errorf("failed to run command to fetch kubeconfig: %v, stderr: %q", err, stderrBuf.String())
 	}
 	return output, nil
 }

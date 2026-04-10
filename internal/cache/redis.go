@@ -33,6 +33,10 @@ func (c *RedisCache) Close() error {
 	return c.client.Close()
 }
 
+func (c *RedisCache) Ping(ctx context.Context) error {
+	return c.client.Ping(ctx).Err()
+}
+
 func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	return c.client.Set(ctx, key, value, expiration).Err()
 }

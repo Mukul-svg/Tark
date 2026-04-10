@@ -31,11 +31,11 @@ func NewDeployHandler(st store.Store, queueClient *worker.Client) *DeployHandler
 }
 
 type deployRequest struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	ModelURL  string `json:"modelUrl"`
-	NodePort  int32  `json:"nodePort"`
-	ClusterID string `json:"clusterId"`
+	Namespace string `json:"namespace" validate:"omitempty,min=1,max=63"`
+	Name      string `json:"name" validate:"omitempty,min=1,max=63"`
+	ModelURL  string `json:"modelUrl" validate:"omitempty,http_url"`
+	NodePort  int32  `json:"nodePort" validate:"omitempty,min=30000,max=32767"`
+	ClusterID string `json:"clusterId" validate:"omitempty,uuid4"`
 }
 
 type deployResponse struct {
@@ -50,7 +50,11 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	if err := c.Bind(req); err != nil {
 		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestBody, "invalid request payload"))
 	}
+	if err := c.Validate(req); err != nil {
+		return apierror.Respond(c, validationError(err))
+	}
 
+	// Apply defaults for omitted optional fields.
 	if req.Namespace == "" {
 		req.Namespace = "default"
 	}
@@ -65,10 +69,6 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 	}
 	if req.NodePort == 0 {
 		req.NodePort = 30000
-	}
-
-	if req.NodePort < 30000 || req.NodePort > 32767 {
-		return apierror.Respond(c, apierror.BadRequest(apierror.InvalidRequestField, "nodePort must be between 30000 and 32767"))
 	}
 
 	ctx := c.Request().Context()

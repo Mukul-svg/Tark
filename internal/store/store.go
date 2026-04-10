@@ -38,5 +38,6 @@ type Store interface {
 	UpdateJobStatus(ctx context.Context, jobID string, status string, errorMsg string) error
 
 	// General
+	Ping(ctx context.Context) error
 	Close()
 }

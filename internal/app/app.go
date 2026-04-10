@@ -36,7 +36,7 @@ func New(cfg *config.Config, st store.Store, c *cache.RedisCache, queueClient *w
 	provisionHandler := handlers.NewProvisionHandler(st, queueClient)
 	jobsHandler := handlers.NewJobsHandler(st)
 
-	server := http.NewServer(deployHandler, proxyHandler, provisionHandler, jobsHandler)
+	server := http.NewServer(deployHandler, proxyHandler, provisionHandler, jobsHandler, st, c)
 
 	return &App{
 		cfg:   cfg,

@@ -49,6 +49,10 @@ func (s *PostgresStore) Close() {
 	s.pool.Close()
 }
 
+func (s *PostgresStore) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}
+
 // --- Organization Methods ---
 
 func (s *PostgresStore) CreateOrganization(ctx context.Context, org *models.Organization) error {
