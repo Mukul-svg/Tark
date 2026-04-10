@@ -384,7 +384,7 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 
 ### In Progress
 
-- [ ] `/readyz` readiness probe that checks DB + Redis before returning 200
+- [x] `/readyz` readiness probe that checks DB + Redis before returning 200
 - [ ] Full deployment state machine (QUEUED → BUILDING → DEPLOYING → RUNNING / FAILED)
 
 ### Planned
@@ -394,7 +394,7 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - [ ] SSH strict host key verification (currently uses `InsecureIgnoreHostKey`)
 - [ ] TLS for database connections (`sslmode=require` instead of `sslmode=disable`)
 - [ ] TLS for Redis connections
-- [ ] Input validation on all request payloads (`go-playground/validator`)
+- [x] Input validation on all request payloads (`go-playground/validator`)
 - [ ] Rate limiting per organization (Redis token bucket)
 - [ ] `_FILE` suffix support for secrets (read secret value from a file path, like Kubernetes does)
 - [ ] Config fail-fast on startup — reject missing required env vars instead of silently falling back to localhost defaults
@@ -424,7 +424,7 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - [ ] User model and session management
 
 **Testing & CI/CD**
-- [ ] Unit tests — zero test files currently exist in the repo
+- [x] Unit tests — foundational unit tests added for Kube builder, SSH and handlers
 - [ ] Queue and Kube interfaces — needed so handlers can be tested without a real Redis or cluster
 - [ ] Mock implementations for Store, Queue, and Kube
 - [ ] Integration tests using testcontainers (real Postgres + Redis in CI)
