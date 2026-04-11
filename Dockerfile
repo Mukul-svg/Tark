@@ -1,5 +1,5 @@
 # Stage 1: Build binaries
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
@@ -12,6 +12,7 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+RUN go mod tidy
 
 # Build both binaries statically
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/server ./cmd/server
