@@ -32,12 +32,16 @@ func NewServer(deployHandler *handlers.DeployHandler,
 
 	e.Use(middleware.Recover())
 
+	e.Use(middleware.RequestID())
+
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus: true,
-		LogURI:    true,
-		LogMethod: true,
+		LogStatus:    true,
+		LogURI:       true,
+		LogMethod:    true,
+		LogRequestID: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			slog.Info("request",
+				"id", v.RequestID,
 				"method", v.Method,
 				"uri", v.URI,
 				"status", v.Status,
