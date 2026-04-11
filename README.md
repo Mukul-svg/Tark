@@ -486,6 +486,12 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - [ ] PostgreSQL streaming replication
 - [ ] Automated database backups
 
+**Strategic Goals (Long-Term)**
+- [ ] **Multi-Cloud Provisioning** — expand beyond Azure to support AWS (EKS/EC2), GCP (GKE/GCE), DigitalOcean, and Oracle Cloud (OCI)
+- [ ] **Tark Dashboard** — centralized web-based UI for managing clusters, deployments, logs, and billing without the CLI
+- [ ] **Advanced Inference Routing** — prefix-aware routing and KV-cache locality optimization for ultra-low latency multi-turn chat
+- [ ] **Cost Governance** — fine-grained GPU cost tracking and automated "spend ceilings" per organization
+
 ---
 
 ## Troubleshooting
