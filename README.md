@@ -287,11 +287,33 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ---
 
-### Health
+### Health & Status
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/healthz` | Liveness check — returns `200 OK` if the server is up |
+| `GET` | `/readyz` | Readiness probe — checks Postgres + Redis before returning `200` |
+| `GET` | `/api/status/:jobId` | Unified status poll — returns job state + linked cluster/deployment status |
+
+**Example — Poll status after provisioning or deploying:**
+```bash
+curl http://localhost:8080/api/status/<jobId>
+```
+
+Response:
+```json
+{
+  "jobId": "...",
+  "taskType": "model:deploy",
+  "status": "running",
+  "startedAt": "2024-01-01T00:00:00Z",
+  "resource": {
+    "type": "deployment",
+    "id": "...",
+    "status": "deploying"
+  }
+}
+```
 
 ---
 
@@ -363,7 +385,7 @@ make api-destroy     # Destroy the test cluster
 
 ## Status & Roadmap
 
-The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **45% complete** against the full architecture target. What's done is solid; what's missing is production hardening.
+The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **55% complete** against the full architecture target. What's done is solid; what's missing is production hardening.
 
 ### Completed
 
@@ -381,11 +403,17 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - Cluster validation on deploy — rejects requests with invalid or non-existent cluster IDs
 - Structured error types via `internal/apierror` — consistent `{"code":"X","message":"Y"}` JSON shape across all handlers
 - Durable `jobs` table in PostgreSQL — job state persisted across server restarts with status tracking (queued, running, completed, failed)
+- Request validation on all endpoints via `go-playground/validator` — declarative struct tags, consistent 400 responses
+- `/readyz` readiness probe — concurrent Postgres + Redis health checks with 3s timeout
+- Typed status constants (`ClusterStatus`, `DeploymentStatus`, `JobStatus`) — enforced at compile time and at the DB level via `CHECK` constraints
+- Full deployment state machine — granular `building → deploying → active` transitions for models, `destroying → destroyed` for clusters
+- `GET /api/status/:jobId` — unified polling endpoint that returns job status and the linked cluster/deployment status in one response
+- Foundational unit test suite — Kubernetes fake clientset, SSH config, and handler validation tests
 
 ### In Progress
 
-- [x] `/readyz` readiness probe that checks DB + Redis before returning 200
-- [ ] Full deployment state machine (QUEUED → BUILDING → DEPLOYING → RUNNING / FAILED)
+- [ ] Domain service layer — group handler logic into `provision.Service` and `deploy.Service`
+- [ ] API versioning — move all routes to `/api/v1/` prefix
 
 ### Planned
 
