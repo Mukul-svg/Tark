@@ -174,7 +174,22 @@ cd Kubernetes
 go mod download
 ```
 
-### Step 2 — Start local backing services (Postgres + Redis)
+### Step 2 — Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in your values. For kubeconfig encryption, generate a key:
+
+```bash
+openssl rand -hex 32
+# paste the output into KUBECONFIG_ENCRYPTION_KEY= in .env
+```
+
+> **Note:** `KUBECONFIG_ENCRYPTION_KEY` is optional in development — omit it to skip encryption with a warning. It is required in production (`ENV=production`).
+
+### Step 3 — Start local backing services (Postgres + Redis)
 
 ```bash
 make dev-up
@@ -194,7 +209,7 @@ This compiles both `bin/server` and `bin/worker`. Migrations are applied automat
 
 > **Important:** If you wipe the database, the migrations will run again on next server start.
 
-### Step 4 — Run the API server and worker
+### Step 5 — Run the API server and worker
 
 Open two terminals:
 
@@ -385,7 +400,7 @@ make api-destroy     # Destroy the test cluster
 
 ## Status & Roadmap
 
-The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **55% complete** against the full architecture target. What's done is solid; what's missing is production hardening.
+The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **60% complete** against the full architecture target. What's done is solid; what's missing is production hardening.
 
 ### Completed
 
@@ -409,6 +424,8 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - Full deployment state machine — granular `building → deploying → active` transitions for models, `destroying → destroyed` for clusters
 - `GET /api/status/:jobId` — unified polling endpoint that returns job status and the linked cluster/deployment status in one response
 - Foundational unit test suite — Kubernetes fake clientset, SSH config, and handler validation tests
+- Kubeconfig encryption at rest — AES-256-GCM, key from `KUBECONFIG_ENCRYPTION_KEY`, nonce-per-write, base64-encoded in Postgres
+- Config fail-fast — `ENV=production` enforces required vars at startup; `.env` file support via `godotenv`
 
 ### In Progress
 
@@ -418,14 +435,13 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 ### Planned
 
 **Security (highest priority)**
-- [ ] Kubeconfig encryption at rest (AES-256-GCM before writing to `clusters.kubeconfig`)
+- [x] Kubeconfig encryption at rest (AES-256-GCM before writing to `clusters.kubeconfig`)
 - [ ] SSH strict host key verification (currently uses `InsecureIgnoreHostKey`)
 - [ ] TLS for database connections (`sslmode=require` instead of `sslmode=disable`)
 - [ ] TLS for Redis connections
 - [x] Input validation on all request payloads (`go-playground/validator`)
 - [ ] Rate limiting per organization (Redis token bucket)
-- [ ] `_FILE` suffix support for secrets (read secret value from a file path, like Kubernetes does)
-- [ ] Config fail-fast on startup — reject missing required env vars instead of silently falling back to localhost defaults
+- [x] Config fail-fast on startup — `ENV=production` enforces required vars; `.env` support via `godotenv`
 
 **API Maturity**
 - [ ] API versioning — move all routes to `/api/v1/` prefix
