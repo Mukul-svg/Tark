@@ -7,6 +7,7 @@ import (
 	"net"
 	"regexp"
 	"simplek8/internal/cache"
+	"simplek8/internal/crypto"
 	"simplek8/internal/kube"
 	"simplek8/internal/models"
 	"simplek8/internal/queue"
@@ -25,9 +26,10 @@ type Server struct {
 	mux    *asynq.ServeMux
 	store  store.Store
 	rdb    *redis.Client
+	cipher *crypto.Cipher // nil when KUBECONFIG_ENCRYPTION_KEY is unset (dev mode)
 }
 
-func NewServer(redisAddr, redisPassword string, concurrency int, st store.Store) *Server {
+func NewServer(redisAddr, redisPassword string, concurrency int, st store.Store, c *crypto.Cipher) *Server {
 	if concurrency <= 0 {
 		concurrency = 10
 	}
@@ -52,6 +54,7 @@ func NewServer(redisAddr, redisPassword string, concurrency int, st store.Store)
 		server: asynqServer,
 		mux:    asynq.NewServeMux(),
 		store:  st,
+		cipher: c,
 		rdb: redis.NewClient(&redis.Options{
 			Addr:     redisAddr,
 			Password: redisPassword,
@@ -153,7 +156,18 @@ func (s *Server) handleProvisionClusterTask(ctx context.Context, task *asynq.Tas
 	newServerLine := fmt.Sprintf("server: https://%s:16443", clusterData.PublicIP)
 	configBytes = re.ReplaceAll(configBytes, []byte(newServerLine))
 
-	if err := s.store.UpdateClusterDetails(ctx, clusterID, models.ClusterStatusActive, string(configBytes), clusterData.PublicIP); err != nil {
+	kubeconfigStr := string(configBytes)
+	if s.cipher != nil {
+		encrypted, encErr := s.cipher.Encrypt(configBytes)
+		if encErr != nil {
+			_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
+			s.failJob(ctx, payload.JobID, encErr)
+			return fmt.Errorf("encrypt kubeconfig: %w", encErr)
+		}
+		kubeconfigStr = encrypted
+	}
+
+	if err := s.store.UpdateClusterDetails(ctx, clusterID, models.ClusterStatusActive, kubeconfigStr, clusterData.PublicIP); err != nil {
 		_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("update cluster details: %w", err)
@@ -163,6 +177,15 @@ func (s *Server) handleProvisionClusterTask(ctx context.Context, task *asynq.Tas
 
 	slog.Info("provision task completed", "jobId", payload.JobID, "clusterId", clusterID, "publicIp", clusterData.PublicIP)
 	return nil
+}
+
+// decryptKubeconfig returns the raw kubeconfig bytes from whatever is stored in the DB.
+// If a cipher is configured it decrypts the stored value; otherwise it returns the raw bytes as-is.
+func (s *Server) decryptKubeconfig(stored string) ([]byte, error) {
+	if s.cipher != nil {
+		return s.cipher.Decrypt(stored)
+	}
+	return []byte(stored), nil
 }
 
 func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) error {
@@ -200,7 +223,15 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("get cluster: %w", err)
 	}
 
-	kubeClient, err := kube.NewFromKubeConfig([]byte(cluster.Kubeconfig))
+	kubeconfig, err := s.decryptKubeconfig(cluster.Kubeconfig)
+	if err != nil {
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
+		s.invalidateModelCache(ctx, payload.Name)
+		s.failJob(ctx, payload.JobID, err)
+		return fmt.Errorf("decrypt kubeconfig: %w", err)
+	}
+
+	kubeClient, err := kube.NewFromKubeConfig(kubeconfig)
 	if err != nil {
 		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.invalidateModelCache(ctx, payload.Name)
@@ -360,7 +391,15 @@ func (s *Server) handleDeleteModelTask(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("get cluster: %w", err)
 	}
 
-	kubeClient, err := kube.NewFromKubeConfig([]byte(cluster.Kubeconfig))
+	kubeconfig, err := s.decryptKubeconfig(cluster.Kubeconfig)
+	if err != nil {
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
+		s.invalidateModelCache(ctx, payload.Name)
+		s.failJob(ctx, payload.JobID, err)
+		return fmt.Errorf("decrypt kubeconfig: %w", err)
+	}
+
+	kubeClient, err := kube.NewFromKubeConfig(kubeconfig)
 	if err != nil {
 		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.failJob(ctx, payload.JobID, err)

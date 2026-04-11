@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"simplek8/internal/config"
+	"simplek8/internal/crypto"
 	"simplek8/internal/store"
 	"simplek8/internal/worker"
 	"strconv"
@@ -26,7 +27,18 @@ func main() {
 	}
 	defer db.Close()
 
-	workerServer := worker.NewServer(cfg.RedisAddr, cfg.RedisPassword, concurrency, db)
+	var cipher *crypto.Cipher
+	if len(cfg.KubeconfigKey) > 0 {
+		var cipherErr error
+		cipher, cipherErr = crypto.NewCipher(cfg.KubeconfigKey)
+		if cipherErr != nil {
+			slog.Error("failed to initialise kubeconfig cipher", "error", cipherErr)
+			os.Exit(1)
+		}
+		slog.Info("kubeconfig encryption enabled")
+	}
+
+	workerServer := worker.NewServer(cfg.RedisAddr, cfg.RedisPassword, concurrency, db, cipher)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
