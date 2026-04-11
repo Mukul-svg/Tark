@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -19,10 +21,13 @@ type Config struct {
 }
 
 // Load reads configuration from environment variables.
+// It first loads a .env file from the working directory if one exists
+// (silently ignored if missing, so production is unaffected).
 // In production (ENV=production), DATABASE_URL and REDIS_ADDR are required —
 // the process exits immediately with a clear message if they are missing.
 // In development, sensible localhost defaults are used.
 func Load() *Config {
+	_ = godotenv.Load() // no-op if .env is absent
 	env := strings.ToLower(os.Getenv("ENV"))
 	if env == "" {
 		env = "development"
