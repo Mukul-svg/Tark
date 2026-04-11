@@ -400,7 +400,7 @@ make api-destroy     # Destroy the test cluster
 
 ## Status & Roadmap
 
-The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **60% complete** against the full architecture target. What's done is solid; what's missing is production hardening.
+The core flow (provision → deploy → proxy) works end-to-end. The codebase is approximately **65% complete** against the full architecture target. Recent work has focused on production hardening, security, and observability.
 
 ### Completed
 
@@ -426,11 +426,14 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - Foundational unit test suite — Kubernetes fake clientset, SSH config, and handler validation tests
 - Kubeconfig encryption at rest — AES-256-GCM, key from `KUBECONFIG_ENCRYPTION_KEY`, nonce-per-write, base64-encoded in Postgres
 - Config fail-fast — `ENV=production` enforces required vars at startup; `.env` file support via `godotenv`
+- Multi-stage Dockerfile — standalone images for `server` and `worker` binaries
+- Request ID middleware — UUID propagation through all request logs for correlation
+- SSH host key verification (partial) — SSH client now supports strict key checking but still defaults to insecure for local dev
 
 ### In Progress
 
 - [ ] Domain service layer — group handler logic into `provision.Service` and `deploy.Service`
-- [ ] API versioning — move all routes to `/api/v1/` prefix
+- [ ] SSH strict host key verification — persist and verify host keys after initial provision
 
 ### Planned
 
@@ -445,8 +448,8 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 
 **API Maturity**
 - [ ] API versioning — move all routes to `/api/v1/` prefix
-- [ ] Route groups with middleware chains (auth, rate-limit, request ID)
-- [ ] Request ID middleware — UUID per request, propagated through logs
+- [ ] Route groups with middleware chains (auth, rate-limit)
+- [x] Request ID middleware — UUID per request, propagated through logs
 - [ ] Custom Echo error handler — consistent JSON shape on panics, 404s, 500s
 - [ ] Audit log table (`audit_logs`) — write an entry on every create/update/delete
 - [ ] Pagination on list endpoints (cursor-based)
@@ -472,7 +475,7 @@ The core flow (provision → deploy → proxy) works end-to-end. The codebase is
 - [ ] Queue and Kube interfaces — needed so handlers can be tested without a real Redis or cluster
 - [ ] Mock implementations for Store, Queue, and Kube
 - [ ] Integration tests using testcontainers (real Postgres + Redis in CI)
-- [ ] Dockerfile — multi-stage build for server and worker binaries
+- [x] Dockerfile — multi-stage build for server and worker binaries
 - [ ] GitHub Actions CI pipeline — lint → test → build → push on tag
 
 **Operational Readiness**
