@@ -86,7 +86,7 @@ func (h *DeployHandler) PostDeploy(c echo.Context) error {
 		NodePort:  req.NodePort,
 		ModelURL:  req.ModelURL,
 		Replicas:  1,
-		Status:    "pending",
+		Status:    string(models.DeploymentStatusPending),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

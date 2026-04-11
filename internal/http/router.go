@@ -59,6 +59,7 @@ func NewServer(deployHandler *handlers.DeployHandler,
 	e.POST("/api/destroy", provisionHandler.HandleDestroy)
 	e.GET("/api/jobs/:id", jobsHandler.GetJobStatus)
 	e.GET("/api/jobs", jobsHandler.ListJobs)
+	e.GET("/api/status/:jobId", jobsHandler.GetStatusByJobID)
 	e.GET("/api/clusters", provisionHandler.HandleListClusters)
 	e.GET("/api/deployments", deployHandler.HandleListDeployments)
 	e.DELETE("/api/deployments/:id", deployHandler.HandleDeleteDeployment)

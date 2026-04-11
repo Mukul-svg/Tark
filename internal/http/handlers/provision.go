@@ -83,7 +83,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 
 		slog.Info("re-provisioning destroyed/failed cluster", "name", req.StackName, "oldStatus", existingCluster.Status)
 		clusterID = existingCluster.ID
-		if err := h.store.ResetCluster(ctx, clusterID, region, "provisioning"); err != nil {
+		if err := h.store.ResetCluster(ctx, clusterID, region, models.ClusterStatusProvisioning); err != nil {
 			slog.Error("failed to reset cluster record", "error", err)
 			return apierror.Respond(c, apierror.Internal(apierror.StoreError, "failed to reset cluster record", err))
 		}
@@ -93,7 +93,7 @@ func (h *ProvisionHandler) HandleProvision(c echo.Context) error {
 			OrgID:     org.ID,
 			Name:      req.StackName,
 			Region:    region,
-			Status:    "provisioning",
+			Status:    string(models.ClusterStatusProvisioning),
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"simplek8/internal/cache"
 	"simplek8/internal/kube"
+	"simplek8/internal/models"
 	"simplek8/internal/queue"
 	"simplek8/internal/store"
 	"simplek8/internal/worker/tasks"
@@ -99,11 +100,11 @@ func (s *Server) failJob(ctx context.Context, jobID string, err error) {
 	if err != nil {
 		msg = err.Error()
 	}
-	_ = s.store.UpdateJobStatus(ctx, jobID, "failed", msg)
+	_ = s.store.UpdateJobStatus(ctx, jobID, models.JobStatusFailed, msg)
 }
 
 func (s *Server) completeJob(ctx context.Context, jobID string) {
-	_ = s.store.UpdateJobStatus(ctx, jobID, "completed", "")
+	_ = s.store.UpdateJobStatus(ctx, jobID, models.JobStatusCompleted, "")
 }
 
 func (s *Server) invalidateModelCache(ctx context.Context, model string) {
@@ -128,22 +129,22 @@ func (s *Server) handleProvisionClusterTask(ctx context.Context, task *asynq.Tas
 		return fmt.Errorf("invalid cluster id in task payload: %w", err)
 	}
 
-	if err := s.store.UpdateClusterStatus(ctx, clusterID, "installing"); err != nil {
+	if err := s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusInstalling); err != nil {
 		slog.Error("failed to set cluster status to installing", "clusterId", clusterID, "error", err)
 	}
 
-	_ = s.store.UpdateJobStatus(ctx, payload.JobID, "running", "")
+	_ = s.store.UpdateJobStatus(ctx, payload.JobID, models.JobStatusRunning, "")
 
 	clusterData, err := ProvisionCluster(ctx, payload.StackName, payload.InfraDir, payload.Config)
 	if err != nil {
-		_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
+		_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("provision cluster: %w", err)
 	}
 
 	configBytes, err := fetchKubeconfigWithRetry(clusterData.PublicIP, payload.SSHKeyPath)
 	if err != nil {
-		_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
+		_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return err
 	}
@@ -152,8 +153,8 @@ func (s *Server) handleProvisionClusterTask(ctx context.Context, task *asynq.Tas
 	newServerLine := fmt.Sprintf("server: https://%s:16443", clusterData.PublicIP)
 	configBytes = re.ReplaceAll(configBytes, []byte(newServerLine))
 
-	if err := s.store.UpdateClusterDetails(ctx, clusterID, "active", string(configBytes), clusterData.PublicIP); err != nil {
-		_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
+	if err := s.store.UpdateClusterDetails(ctx, clusterID, models.ClusterStatusActive, string(configBytes), clusterData.PublicIP); err != nil {
+		_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("update cluster details: %w", err)
 	}
@@ -185,15 +186,15 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("invalid cluster id in task payload: %w", err)
 	}
 
-	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, "installing"); err != nil {
-		slog.Error("failed to set deployment status to installing", "deploymentId", deploymentID, "error", err)
+	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusBuilding); err != nil {
+		slog.Error("failed to set deployment status to building", "deploymentId", deploymentID, "error", err)
 	}
 
-	_ = s.store.UpdateJobStatus(ctx, payload.JobID, "running", "")
+	_ = s.store.UpdateJobStatus(ctx, payload.JobID, models.JobStatusRunning, "")
 
 	cluster, err := s.store.GetCluster(ctx, clusterID)
 	if err != nil {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.invalidateModelCache(ctx, payload.Name)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("get cluster: %w", err)
@@ -201,7 +202,7 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 
 	kubeClient, err := kube.NewFromKubeConfig([]byte(cluster.Kubeconfig))
 	if err != nil {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.invalidateModelCache(ctx, payload.Name)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("build kube client from cluster kubeconfig: %w", err)
@@ -213,10 +214,15 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 		NodePort: payload.NodePort,
 	})
 	if err != nil {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.invalidateModelCache(ctx, payload.Name)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("deploy model: %w", err)
+	}
+
+	// Manifests applied — now waiting for pods to become ready.
+	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusDeploying); err != nil {
+		slog.Error("failed to set deployment status to deploying", "deploymentId", deploymentID, "error", err)
 	}
 
 	serviceURL := fmt.Sprintf("http://%s", net.JoinHostPort(cluster.PublicIP, fmt.Sprintf("%d", payload.NodePort)))
@@ -233,7 +239,7 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 		}
 		select {
 		case <-ctx.Done():
-			_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+			_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 			s.invalidateModelCache(ctx, payload.Name)
 			s.failJob(ctx, payload.JobID, fmt.Errorf("deployment cancelled while waiting for health"))
 			return fmt.Errorf("deployment cancelled while waiting for health: %w", ctx.Err())
@@ -242,13 +248,13 @@ func (s *Server) handleDeployModelTask(ctx context.Context, task *asynq.Task) er
 	}
 
 	if !targetHealthy {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.invalidateModelCache(ctx, payload.Name)
 		s.failJob(ctx, payload.JobID, fmt.Errorf("deployment timed out waiting to become healthy"))
 		return fmt.Errorf("deployment timed out waiting to become healthy: %s", serviceURL)
 	}
 
-	if err := s.store.UpdateDeploymentServiceURL(ctx, deploymentID, "active", serviceURL); err != nil {
+	if err := s.store.UpdateDeploymentServiceURL(ctx, deploymentID, models.DeploymentStatusActive, serviceURL); err != nil {
 		s.invalidateModelCache(ctx, payload.Name)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("mark deployment active: %w", err)
@@ -267,12 +273,18 @@ func (s *Server) handleDestroyClusterTask(ctx context.Context, task *asynq.Task)
 		return fmt.Errorf("parse destroy task: %w", err)
 	}
 
-	_ = s.store.UpdateJobStatus(ctx, payload.JobID, "running", "")
+	_ = s.store.UpdateJobStatus(ctx, payload.JobID, models.JobStatusRunning, "")
+
+	if payload.ClusterID != "" {
+		if clusterID, parseErr := uuid.Parse(payload.ClusterID); parseErr == nil {
+			_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusDestroying)
+		}
+	}
 
 	if err := DestroyCluster(ctx, payload.StackName, payload.InfraDir); err != nil {
 		if payload.ClusterID != "" {
 			if clusterID, parseErr := uuid.Parse(payload.ClusterID); parseErr == nil {
-				_ = s.store.UpdateClusterStatus(ctx, clusterID, "failed")
+				_ = s.store.UpdateClusterStatus(ctx, clusterID, models.ClusterStatusFailed)
 			}
 		}
 		s.failJob(ctx, payload.JobID, err)
@@ -281,13 +293,13 @@ func (s *Server) handleDestroyClusterTask(ctx context.Context, task *asynq.Task)
 
 	if payload.ClusterID != "" {
 		if clusterID, parseErr := uuid.Parse(payload.ClusterID); parseErr == nil {
-			if err := s.store.UpdateClusterDetails(ctx, clusterID, "destroyed", "", ""); err != nil {
+			if err := s.store.UpdateClusterDetails(ctx, clusterID, models.ClusterStatusDestroyed, "", ""); err != nil {
 				s.failJob(ctx, payload.JobID, err)
 				return fmt.Errorf("update destroyed status: %w", err)
 			}
 
-			// Cascade the destruction event to any running model deployments on this cluster
-			if err := s.store.UpdateDeploymentsStatusByCluster(ctx, clusterID, "orphaned"); err != nil {
+			// Cascade the destruction event to any running model deployments on this cluster.
+			if err := s.store.UpdateDeploymentsStatusByCluster(ctx, clusterID, models.DeploymentStatusOrphaned); err != nil {
 				slog.Error("failed to mark deployments as orphaned during cluster destroy", "clusterId", clusterID, "error", err)
 			}
 		}
@@ -335,12 +347,12 @@ func (s *Server) handleDeleteModelTask(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("invalid cluster id: %w", err)
 	}
 
-	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, "deleting"); err != nil {
+	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusDeleting); err != nil {
 		slog.Error("failed to update state", "error", err)
 	}
 	s.invalidateModelCache(ctx, payload.Name)
 
-	_ = s.store.UpdateJobStatus(ctx, payload.JobID, "running", "")
+	_ = s.store.UpdateJobStatus(ctx, payload.JobID, models.JobStatusRunning, "")
 
 	cluster, err := s.store.GetCluster(ctx, clusterID)
 	if err != nil {
@@ -350,18 +362,18 @@ func (s *Server) handleDeleteModelTask(ctx context.Context, task *asynq.Task) er
 
 	kubeClient, err := kube.NewFromKubeConfig([]byte(cluster.Kubeconfig))
 	if err != nil {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("kube client error: %w", err)
 	}
 
 	if err := kubeClient.DeleteModel(ctx, payload.Namespace, payload.Name); err != nil {
-		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, "failed")
+		_ = s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusFailed)
 		s.failJob(ctx, payload.JobID, err)
 		return fmt.Errorf("delete model: %w", err)
 	}
 
-	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, "deleted"); err != nil {
+	if err := s.store.UpdateDeploymentStatus(ctx, deploymentID, models.DeploymentStatusDeleted); err != nil {
 		return fmt.Errorf("mark deployment deleted: %w", err)
 	}
 

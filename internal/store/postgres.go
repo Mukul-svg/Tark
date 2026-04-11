@@ -169,13 +169,13 @@ func (s *PostgresStore) ListClusters(ctx context.Context, orgID uuid.UUID) ([]mo
 	return clusters, nil
 }
 
-func (s *PostgresStore) UpdateClusterStatus(ctx context.Context, id uuid.UUID, status string) error {
+func (s *PostgresStore) UpdateClusterStatus(ctx context.Context, id uuid.UUID, status models.ClusterStatus) error {
 	query := `UPDATE clusters SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := s.pool.Exec(ctx, query, status, id)
 	return err
 }
 
-func (s *PostgresStore) UpdateClusterDetails(ctx context.Context, id uuid.UUID, status string, kubeconfig string, publicIP string) error {
+func (s *PostgresStore) UpdateClusterDetails(ctx context.Context, id uuid.UUID, status models.ClusterStatus, kubeconfig string, publicIP string) error {
 	query := `
 		UPDATE clusters 
 		SET status = $1, kubeconfig = $2, public_ip = $3, updated_at = NOW() 
@@ -185,7 +185,7 @@ func (s *PostgresStore) UpdateClusterDetails(ctx context.Context, id uuid.UUID, 
 	return err
 }
 
-func (s *PostgresStore) ResetCluster(ctx context.Context, id uuid.UUID, region string, status string) error {
+func (s *PostgresStore) ResetCluster(ctx context.Context, id uuid.UUID, region string, status models.ClusterStatus) error {
 	query := `
 		UPDATE clusters 
 		SET status = $1, region = $2, kubeconfig = '', public_ip = '', updated_at = NOW() 
@@ -256,13 +256,13 @@ func (s *PostgresStore) ListDeployments(ctx context.Context) ([]models.Deploymen
 	return deployments, nil
 }
 
-func (s *PostgresStore) UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, status string) error {
+func (s *PostgresStore) UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, status models.DeploymentStatus) error {
 	query := `UPDATE deployments SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := s.pool.Exec(ctx, query, status, id)
 	return err
 }
 
-func (s *PostgresStore) UpdateDeploymentServiceURL(ctx context.Context, id uuid.UUID, status string, serviceURL string) error {
+func (s *PostgresStore) UpdateDeploymentServiceURL(ctx context.Context, id uuid.UUID, status models.DeploymentStatus, serviceURL string) error {
 	query := `
 		UPDATE deployments
 		SET status = $1, service_url = $2, updated_at = NOW()
@@ -272,7 +272,7 @@ func (s *PostgresStore) UpdateDeploymentServiceURL(ctx context.Context, id uuid.
 	return err
 }
 
-func (s *PostgresStore) UpdateDeploymentsStatusByCluster(ctx context.Context, clusterID uuid.UUID, status string) error {
+func (s *PostgresStore) UpdateDeploymentsStatusByCluster(ctx context.Context, clusterID uuid.UUID, status models.DeploymentStatus) error {
 	query := `
 		UPDATE deployments
 		SET status = $1, updated_at = NOW()
@@ -417,7 +417,7 @@ func mapNullableFields(
 	}
 }
 
-func (s *PostgresStore) UpdateJobStatus(ctx context.Context, jobID string, status string, errMsg string) error {
+func (s *PostgresStore) UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus, errMsg string) error {
 	query := `
 		UPDATE jobs
 		SET status = $1, error = NULLIF($2, ''), updated_at = NOW(),
